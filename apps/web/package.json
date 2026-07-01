@@ -1,0 +1,37 @@
+{
+  "name": "web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node -e \"require('child_process').spawnSync('npx', ['vite'], { stdio: 'inherit', env: { ...process.env, GODEBUG: 'asyncpreemptoff=1' } })\"",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@corplan/shared-types": "*",
+    "@ant-design/charts": "^2.2.0",
+    "@ant-design/icons": "^5.6.1",
+    "antd": "^5.24.0",
+    "dayjs": "^1.11.13",
+    "framer-motion": "^12.0.0",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
+    "numeral": "^2.0.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/numeral": "^2.0.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0"
+  }
+}

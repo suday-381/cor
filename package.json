@@ -1,0 +1,18 @@
+{
+  "name": "corplan-rkap-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@10.8.2",
+  "scripts": {
+    "dev": "node -e \"require('child_process').spawnSync('npx', ['turbo', 'run', 'dev'], { stdio: 'inherit', env: { ...process.env, GODEBUG: 'asyncpreemptoff=1' } })\"",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  }
+}

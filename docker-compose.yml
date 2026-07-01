@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: corplan-postgres
+    environment:
+      POSTGRES_DB: corplan_rkap
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d corplan_rkap" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: corplan-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  calc-engine:
+    build:
+      context: ./apps/calc-engine
+      dockerfile: Dockerfile
+    container_name: corplan-calc-engine
+    ports:
+      - "8001:8000"
+    environment:
+      - PORT=8000
+    restart: always
+
+  api:
+    build:
+      context: .
+      dockerfile: ./apps/api/Dockerfile
+    container_name: corplan-api
+    ports:
+      - "3017:3000"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=corplan_rkap
+      - CALC_ENGINE_URL=http://calc-engine:8000
+      - JWT_SECRET=corplan_super_secret_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: always
+
+  web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile
+    container_name: corplan-web
+    ports:
+      - "8080:80"
+    environment:
+      - API_URL=http://api:3000
+    depends_on:
+      - api
+    restart: always
+
+volumes:
+  postgres-data:
+  redis-data:
