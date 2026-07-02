@@ -21,6 +21,7 @@ export class CostService {
   }
 
   private async checkWritePermission(cycleId: string, departmentId: string, user: User) {
+    await this.workflowService.checkDueDate(cycleId, user);
     const isGlobalRole = ['super_admin', 'csp', 'cfo'].includes(user.role);
 
     if (!isGlobalRole) {

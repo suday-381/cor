@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Breadcrumb } from 'antd';
+import { Layout, Breadcrumb, Modal } from 'antd';
 import { Outlet, useLocation, Link, Navigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAppStore } from '@/stores/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ExclamationCircleOutlined } from '@ant-design/icons';
 
 const { Content } = Layout;
 
@@ -15,6 +16,8 @@ export const AppLayout: React.FC = () => {
   const loadInitialData = useAppStore(state => state.loadInitialData);
   const loadCycleData = useAppStore(state => state.loadCycleData);
   const selectedCycleId = useAppStore(state => state.selectedCycleId);
+  const cycles = useAppStore(state => state.cycles);
+  const activeCycle = cycles.find(c => c.id === selectedCycleId);
 
   useEffect(() => {
     if (currentUser) {
@@ -27,6 +30,28 @@ export const AppLayout: React.FC = () => {
       loadCycleData(selectedCycleId);
     }
   }, [currentUser, selectedCycleId, loadCycleData]);
+
+  useEffect(() => {
+    if (currentUser && activeCycle?.dueDate) {
+      const hasSeen = sessionStorage.getItem(`corplan_due_date_seen_${activeCycle.id}`);
+      if (!hasSeen) {
+        const due = new Date(activeCycle.dueDate);
+        const isPast = new Date() > due;
+        const msg = isPast 
+          ? `Batas waktu pengumpulan RKAP telah lewat pada ${due.toLocaleDateString('id-ID')}. Anda tidak dapat lagi mengedit anggaran.`
+          : `Jangan lupa batas akhir pengumpulan dan pengajuan RKAP adalah ${due.toLocaleDateString('id-ID')}. Pastikan Anda telah menyelesaikan anggaran sebelum tanggal tersebut.`;
+        
+        Modal.info({
+          title: 'Peringatan Batas Waktu Pengumpulan RKAP',
+          content: msg,
+          icon: <ExclamationCircleOutlined style={{ color: isPast ? '#EF4444' : '#F59E0B' }} />,
+          onOk: () => {
+            sessionStorage.setItem(`corplan_due_date_seen_${activeCycle.id}`, 'true');
+          }
+        });
+      }
+    }
+  }, [currentUser, activeCycle]);
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
@@ -52,6 +77,7 @@ export const AppLayout: React.FC = () => {
       if (name === 'cashflow') title = 'Proyeksi Arus Kas';
       if (name === 'balance-sheet') title = 'Proyeksi Neraca';
       if (name === 'workflow') title = 'Workflow Approval';
+      if (name === 'submissions') title = 'Daftar Pengajuan';
       if (name === 'export') title = 'Laporan & Ekspor';
       if (name === 'users') title = 'Manajemen User';
       if (name === 'audit') title = 'Log Audit';

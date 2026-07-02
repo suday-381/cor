@@ -21,6 +21,7 @@ export class RevenueService {
   }
 
   private async checkWritePermission(cycleId: string, departmentId: string, user: User) {
+    await this.workflowService.checkDueDate(cycleId, user);
     // 1. Super Admin, CSP, CFO have global bypass
     const isGlobalRole = ['super_admin', 'csp', 'cfo'].includes(user.role);
 

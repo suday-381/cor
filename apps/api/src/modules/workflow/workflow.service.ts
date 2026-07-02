@@ -143,7 +143,21 @@ export class WorkflowService {
     return this.addDocumentStatus(workflow);
   }
 
-  async submit(cycleId: string, departmentId: string | undefined, user: User): Promise<ApprovalWorkflow> {
+  async checkDueDate(cycleId: string, user: User) {
+    if (user.role === 'budget_owner') {
+      const cycle = await this.cycleRepository.findOne({ where: { id: cycleId } });
+      if (cycle && cycle.dueDate) {
+        const due = new Date(cycle.dueDate);
+        due.setHours(23, 59, 59, 999);
+        if (new Date() > due) {
+          throw new BadRequestException('Batas waktu pengumpulan (Due Date) RKAP telah terlewat.');
+        }
+      }
+    }
+  }
+
+  async submit(cycleId: string, departmentId: string | undefined, user: User, submissionName?: string): Promise<ApprovalWorkflow> {
+    await this.checkDueDate(cycleId, user);
     const divisionId = await this.resolveDivisionId(departmentId || user.departmentId);
     const wf = await this.getWorkflow(cycleId, divisionId);
 
@@ -157,6 +171,9 @@ export class WorkflowService {
     wf.status = 'in_progress';
     wf.currentStageIndex = 1;
     wf.submittedAt = new Date().toISOString();
+    if (submissionName) {
+      wf.submissionName = submissionName;
+    }
 
     wf.stages.sort((a, b) => a.sortOrder - b.sortOrder);
     wf.stages[0].status = 'approved';
@@ -281,6 +298,7 @@ export class WorkflowService {
 
     wf.status = 'pending';
     wf.currentStageIndex = 0;
+    wf.submissionVersion = (wf.submissionVersion || 1) + 1;
     
     // Reset stages
     if (!wf.stages || wf.stages.length < 3) {

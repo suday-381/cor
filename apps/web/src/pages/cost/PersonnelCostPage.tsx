@@ -30,10 +30,38 @@ export const PersonnelCostPage: React.FC = () => {
 
 
   const activeCycle = cycles.find(c => c.id === selectedCycleId);
-  const activeStaff = personnelItems.filter(p => p.cycleId === selectedCycleId);
-  const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked';
+  const allActiveStaff = personnelItems.filter(p => p.cycleId === selectedCycleId);
+  const isPastDue = activeCycle?.dueDate ? new Date(activeCycle.dueDate) < new Date() : false;
+  const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked' || isPastDue;
 
-  const deptOptions = departments.map(d => ({ value: d.id, label: d.name }));
+  const currentUserData = useAppStore(state => state.currentUser);
+  const isGlobalRole = currentUserData && ['super_admin', 'csp', 'cfo'].includes(currentUserData.role);
+  
+  const [selectedDivisionFilter, setSelectedDivisionFilter] = useState<string | undefined>(undefined);
+
+  const activeStaff = React.useMemo(() => {
+    if (!selectedDivisionFilter) return allActiveStaff;
+    return allActiveStaff.filter(s => s.departmentId === selectedDivisionFilter);
+  }, [allActiveStaff, selectedDivisionFilter]);
+
+  // Determine User's Division & Allowed Departments
+  const userDept = departments.find(d => d.id === currentUserData?.departmentId);
+  const userDivisionId = userDept?.parentId || userDept?.id;
+  const allowedDepts = isGlobalRole
+    ? departments
+    : departments.filter(d => (d.parentId === userDivisionId || d.id === userDivisionId) && d.parentId);
+
+  const deptOptions = allowedDepts.map(d => ({ value: d.id, label: d.name }));
+
+  // Division filter options
+  const divisionFilterOptions = React.useMemo(() => {
+    if (!isGlobalRole && userDivisionId) {
+      const div = departments.find(d => d.id === userDivisionId);
+      return div ? [{ value: div.id, label: div.name }] : [];
+    }
+    const opts = departments.filter(d => !d.parentId).map(d => ({ value: d.id, label: d.name }));
+    return [{ value: '', label: 'Semua Divisi' }, ...opts];
+  }, [departments, isGlobalRole, userDivisionId]);
 
   const columns = [
     {
@@ -141,13 +169,13 @@ export const PersonnelCostPage: React.FC = () => {
       : []),
   ];
 
-  const handleAdd = (values: any) => {
+  const handleAdd = async (values: any) => {
     // Total Annual = HC * (Salary + Allowances + BPJS) * 12 + HC * Bonus
     const totalAnnual = values.headcount * (values.monthlySalary + values.allowances + values.bpjs) * 12 + values.headcount * values.bonus;
 
-    addPersonnelItem({
+    const success = await addPersonnelItem({
       cycleId: selectedCycleId,
-      departmentId: values.departmentId,
+      departmentId: values.departmentId || allowedDepts[0]?.id,
       position: values.position,
       headcount: values.headcount,
       monthlySalary: values.monthlySalary,
@@ -158,17 +186,19 @@ export const PersonnelCostPage: React.FC = () => {
       costCategory: values.costCategory || 'opex',
     });
 
-    setIsAddModalOpen(false);
-    addForm.resetFields();
+    if (success) {
+      setIsAddModalOpen(false);
+      addForm.resetFields();
+    }
   };
 
-  const handleEdit = (values: any) => {
+  const handleEdit = async (values: any) => {
     if (activeItem) {
       const totalAnnual = values.headcount * (values.monthlySalary + values.allowances + values.bpjs) * 12 + values.headcount * values.bonus;
 
-      updatePersonnelItem(activeItem.id, {
+      const success = await updatePersonnelItem(activeItem.id, {
         position: values.position,
-        departmentId: values.departmentId,
+        departmentId: values.departmentId || activeItem.departmentId,
         headcount: values.headcount,
         monthlySalary: values.monthlySalary,
         allowances: values.allowances,
@@ -177,7 +207,9 @@ export const PersonnelCostPage: React.FC = () => {
         totalAnnual,
         costCategory: values.costCategory || 'opex',
       });
-      setIsEditModalOpen(false);
+      if (success) {
+        setIsEditModalOpen(false);
+      }
     }
   };
 
@@ -198,6 +230,16 @@ export const PersonnelCostPage: React.FC = () => {
               Kelola rencana rekrutmen jabatan, gaji, tunjangan, dan perhitungan BPJS secara bulanan dan tahunan.
             </Paragraph>
           </div>
+        </Space>
+        <Space>
+          <Select
+            style={{ minWidth: 220 }}
+            placeholder="Filter Divisi / Departemen"
+            value={selectedDivisionFilter || ''}
+            onChange={(val) => setSelectedDivisionFilter(val || undefined)}
+            options={divisionFilterOptions}
+            dropdownStyle={{ backgroundColor: '#111827' }}
+          />
         </Space>
         {!isReadOnly && (
           <Button
@@ -257,7 +299,7 @@ export const PersonnelCostPage: React.FC = () => {
           form={addForm}
           onFinish={handleAdd}
           layout="vertical"
-          initialValues={{ departmentId: 'd-ops', headcount: 1, monthlySalary: 5000000, allowances: 1000000, bpjs: 500000, bonus: 5000000, costCategory: 'opex' }}
+          initialValues={{ departmentId: allowedDepts[0]?.id, headcount: 1, monthlySalary: 5000000, allowances: 1000000, bpjs: 500000, bonus: 5000000, costCategory: 'opex' }}
           style={{ marginTop: 16 }}
         >
           <Row gutter={16}>

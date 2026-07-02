@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Row, Col, Typography, Tag, Tooltip, Statistic, Divider } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, InfoCircleOutlined, FilterOutlined } from '@ant-design/icons';
 import { useAppStore } from '@/stores/appStore';
 import { CapExItem, MonthlyValues } from '@/types';
 
@@ -21,14 +21,24 @@ export const CapExBudgetPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<CapExItem | null>(null);
+  const [selectedDivisionFilter, setSelectedDivisionFilter] = useState<string | undefined>(undefined);
 
   const [addForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
-  const activeCycle = cycles.find(c => c.id === selectedCycleId);
-  const activeCapEx = capexItems.filter(cx => cx.cycleId === selectedCycleId);
+  const isGlobalRole = currentUser && ['super_admin', 'csp', 'cfo'].includes(currentUser.role);
 
-  const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked';
+  const activeCycle = cycles.find(c => c.id === selectedCycleId);
+  const allActiveCapEx = capexItems.filter(cx => cx.cycleId === selectedCycleId);
+
+  const isPastDue = activeCycle?.dueDate ? new Date(activeCycle.dueDate) < new Date() : false;
+  const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked' || isPastDue;
+
+  // Filter by selected division/department
+  const activeCapEx = useMemo(() => {
+    if (!selectedDivisionFilter) return allActiveCapEx;
+    return allActiveCapEx.filter(cx => cx.departmentId === selectedDivisionFilter);
+  }, [allActiveCapEx, selectedDivisionFilter]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
@@ -66,7 +76,24 @@ export const CapExBudgetPage: React.FC = () => {
     { value: 'Inventaris', label: 'Inventaris Kantor' },
   ];
 
-  const deptOptions = departments.map(d => ({ value: d.id, label: d.name }));
+  // Determine User's Division & Allowed Departments
+  const userDept = departments.find(d => d.id === currentUser?.departmentId);
+  const userDivisionId = userDept?.parentId || userDept?.id;
+  const allowedDepts = isGlobalRole
+    ? departments
+    : departments.filter(d => (d.parentId === userDivisionId || d.id === userDivisionId) && d.parentId);
+
+  const deptOptions = allowedDepts.map(d => ({ value: d.id, label: d.name }));
+
+  // Division filter options
+  const divisionFilterOptions = useMemo(() => {
+    if (!isGlobalRole && userDivisionId) {
+      const div = departments.find(d => d.id === userDivisionId);
+      return div ? [{ value: div.id, label: div.name }] : [];
+    }
+    const opts = departments.filter(d => !d.parentId).map(d => ({ value: d.id, label: d.name }));
+    return [{ value: '', label: 'Semua Divisi' }, ...opts];
+  }, [departments, isGlobalRole, userDivisionId]);
 
   // KPI Calculations
   const totalBudget = activeCapEx.reduce((sum, item) => sum + item.totalCost, 0);
@@ -177,27 +204,35 @@ export const CapExBudgetPage: React.FC = () => {
       : [])
   ];
 
-  const handleAddSubmit = (values: any) => {
+  const handleAddSubmit = async (values: any) => {
     const totalCost = values.qty * values.costPerUnit;
-    addCapExItem({
+    const departmentId = values.departmentId || allowedDepts[0]?.id;
+    const success = await addCapExItem({
       ...values,
+      departmentId,
       cycleId: selectedCycleId,
       totalCost,
     });
-    setIsAddModalOpen(false);
-    addForm.resetFields();
+    if (success) {
+      setIsAddModalOpen(false);
+      addForm.resetFields();
+    }
   };
 
-  const handleEditSubmit = (values: any) => {
+  const handleEditSubmit = async (values: any) => {
     if (!activeItem) return;
     const totalCost = values.qty * values.costPerUnit;
-    updateCapExItem(activeItem.id, {
+    const departmentId = values.departmentId || activeItem.departmentId;
+    const success = await updateCapExItem(activeItem.id, {
       ...values,
+      departmentId,
       totalCost,
     });
-    setIsEditModalOpen(false);
-    setActiveItem(null);
-    editForm.resetFields();
+    if (success) {
+      setIsEditModalOpen(false);
+      setActiveItem(null);
+      editForm.resetFields();
+    }
   };
 
   return (
@@ -210,16 +245,32 @@ export const CapExBudgetPage: React.FC = () => {
             Kelola pengeluaran belanja modal (Capital Expenditure) dan jadwalkan penyusutan aset secara otomatis.
           </Paragraph>
         </div>
-        {!isReadOnly && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setIsAddModalOpen(true)}
-            style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', border: 'none' }}
-          >
-            Tambah Belanja Modal
-          </Button>
-        )}
+        <Space>
+          <Select
+            style={{ minWidth: 220 }}
+            placeholder="Filter Divisi / Departemen"
+            value={selectedDivisionFilter || ''}
+            onChange={(val) => setSelectedDivisionFilter(val || undefined)}
+            options={divisionFilterOptions}
+            suffixIcon={<FilterOutlined />}
+            dropdownStyle={{ backgroundColor: '#111827' }}
+          />
+          {!isReadOnly && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                if (!isGlobalRole && userDeptId) {
+                  addForm.setFieldsValue({ departmentId: userDeptId });
+                }
+                setIsAddModalOpen(true);
+              }}
+              style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', border: 'none' }}
+            >
+              Tambah Belanja Modal
+            </Button>
+          )}
+        </Space>
       </div>
 
       {/* KPI Row */}
@@ -286,7 +337,8 @@ export const CapExBudgetPage: React.FC = () => {
             qty: 1,
             usefulLife: 5,
             depreciationMethod: 'straight_line',
-            procurementMonth: 'jan'
+            procurementMonth: 'jan',
+            departmentId: userDeptId,
           }}
         >
           <Row gutter={16}>

@@ -31,4 +31,10 @@ export class ApprovalWorkflow {
 
   @Column({ name: 'completed_at', nullable: true })
   completedAt?: string;
+
+  @Column({ name: 'submission_name', nullable: true })
+  submissionName?: string;
+
+  @Column({ name: 'submission_version', type: 'int', default: 1 })
+  submissionVersion: number;
 }

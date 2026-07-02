@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Row, Col, Typography, Collapse, Tabs, Tag, Statistic } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, FileTextOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, FileTextOutlined, FilterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/appStore';
 import { MonthlyGrid } from '@/components/common/MonthlyGrid';
@@ -21,6 +21,7 @@ export const CostBudgetPage: React.FC = () => {
     deleteCostItem,
     coa,
     departments,
+    currentUser,
     displayUnit,
   } = useAppStore();
 
@@ -28,14 +29,23 @@ export const CostBudgetPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<CostLineItem | null>(null);
+  const [selectedDivisionFilter, setSelectedDivisionFilter] = useState<string | undefined>(undefined);
 
   const [addForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
+  const isGlobalRole = currentUser && ['super_admin', 'csp', 'cfo'].includes(currentUser.role);
 
   const activeCycle = cycles.find(c => c.id === selectedCycleId);
-  const activeCosts = costItems.filter(c => c.cycleId === selectedCycleId);
-  const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked';
+  const allActiveCosts = costItems.filter(c => c.cycleId === selectedCycleId);
+  const isPastDue = activeCycle?.dueDate ? new Date(activeCycle.dueDate) < new Date() : false;
+  const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked' || isPastDue;
+
+  // Filter by selected division/department
+  const activeCosts = useMemo(() => {
+    if (!selectedDivisionFilter) return allActiveCosts;
+    return allActiveCosts.filter(c => c.departmentId === selectedDivisionFilter);
+  }, [allActiveCosts, selectedDivisionFilter]);
 
   const calculateSum = (mv: MonthlyValues) => {
     return Object.values(mv).reduce((a, b) => a + b, 0);
@@ -45,7 +55,24 @@ export const CostBudgetPage: React.FC = () => {
     .filter(c => c.accountType === 'expense')
     .map(c => ({ value: c.id, label: `${c.code} - ${c.name}` }));
 
-  const deptOptions = departments.map(d => ({ value: d.id, label: d.name }));
+  // Determine User's Division & Allowed Departments
+  const userDept = departments.find(d => d.id === currentUser?.departmentId);
+  const userDivisionId = userDept?.parentId || userDept?.id;
+  const allowedDepts = isGlobalRole
+    ? departments
+    : departments.filter(d => (d.parentId === userDivisionId || d.id === userDivisionId) && d.parentId); // only show actual departments, not divisions themselves (if possible)
+
+  const deptOptions = allowedDepts.map(d => ({ value: d.id, label: d.name }));
+
+  // Division filter options (Divisions have no parentId)
+  const divisionFilterOptions = useMemo(() => {
+    if (!isGlobalRole && userDivisionId) {
+      const div = departments.find(d => d.id === userDivisionId);
+      return div ? [{ value: div.id, label: div.name }] : [];
+    }
+    const opts = departments.filter(d => !d.parentId).map(d => ({ value: d.id, label: d.name }));
+    return [{ value: '', label: 'Semua Divisi' }, ...opts];
+  }, [departments, isGlobalRole, userDivisionId]);
 
   const columns = [
     {
@@ -142,7 +169,7 @@ export const CostBudgetPage: React.FC = () => {
       : []),
   ];
 
-  const handleAdd = (values: any) => {
+  const handleAdd = async (values: any) => {
     const selectedCoa = coa.find(c => c.id === values.accountId);
     if (!selectedCoa) return;
 
@@ -150,9 +177,12 @@ export const CostBudgetPage: React.FC = () => {
       jan: 0, feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0, aug: 0, sep: 0, oct: 0, nov: 0, dec: 0
     };
 
-    addCostItem({
+    // We can use the first allowed department if no department selected (e.g. for division-only roles)
+    const departmentId = values.departmentId || allowedDepts[0]?.id;
+
+    const success = await addCostItem({
       cycleId: selectedCycleId,
-      departmentId: values.departmentId,
+      departmentId,
       accountId: values.accountId,
       accountCode: selectedCoa.code,
       accountName: selectedCoa.name,
@@ -161,22 +191,27 @@ export const CostBudgetPage: React.FC = () => {
       notes: values.notes,
     });
 
-    setIsAddModalOpen(false);
-    addForm.resetFields();
+    if (success) {
+      setIsAddModalOpen(false);
+      addForm.resetFields();
+    }
   };
 
-  const handleEdit = (values: any) => {
+  const handleEdit = async (values: any) => {
     if (activeItem) {
       const selectedCoa = coa.find(c => c.id === values.accountId);
-      updateCostItem(activeItem.id, {
+      const departmentId = values.departmentId || activeItem.departmentId;
+      const success = await updateCostItem(activeItem.id, {
         accountId: values.accountId,
         accountCode: selectedCoa?.code || activeItem.accountCode,
         accountName: selectedCoa?.name || activeItem.accountName,
-        departmentId: values.departmentId,
+        departmentId,
         category: values.category,
         notes: values.notes,
       });
-      setIsEditModalOpen(false);
+      if (success) {
+        setIsEditModalOpen(false);
+      }
     }
   };
 
@@ -192,6 +227,15 @@ export const CostBudgetPage: React.FC = () => {
           </Paragraph>
         </div>
         <Space>
+          <Select
+            style={{ minWidth: 220 }}
+            placeholder="Filter Divisi / Departemen"
+            value={selectedDivisionFilter || ''}
+            onChange={(val) => setSelectedDivisionFilter(val || undefined)}
+            options={divisionFilterOptions}
+            suffixIcon={<FilterOutlined />}
+            dropdownStyle={{ backgroundColor: '#111827' }}
+          />
           <Button
             type="dashed"
             icon={<UserOutlined />}
@@ -204,7 +248,13 @@ export const CostBudgetPage: React.FC = () => {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => {
+                // Pre-set department for non-global users
+                if (!isGlobalRole && userDeptId) {
+                  addForm.setFieldsValue({ departmentId: userDeptId });
+                }
+                setIsAddModalOpen(true);
+              }}
             >
               Tambah Anggaran Biaya
             </Button>
@@ -295,7 +345,7 @@ export const CostBudgetPage: React.FC = () => {
           form={addForm}
           onFinish={handleAdd}
           layout="vertical"
-          initialValues={{ departmentId: 'd-ops', category: 'fixed' }}
+          initialValues={{ departmentId: userDeptId || 'd-ops', category: 'fixed' }}
           style={{ marginTop: 16 }}
         >
           <Form.Item name="accountId" label="Akun Pengeluaran (CoA)" rules={[{ required: true, message: 'Pilih Akun CoA!' }]}>

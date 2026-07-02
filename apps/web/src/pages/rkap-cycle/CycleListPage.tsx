@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Table, Button, Card, Space, Tag, Modal, Form, InputNumber, Select, Descriptions, Divider, Typography, Alert, Row, Col, Timeline } from 'antd';
+import { Table, Button, Card, Space, Tag, Modal, Form, InputNumber, Select, Descriptions, Divider, Typography, Alert, Row, Col, Timeline, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import { PlusOutlined, CopyOutlined, HistoryOutlined, EditOutlined, SettingOutlined } from '@ant-design/icons';
 import { useAppStore } from '@/stores/appStore';
 import { RkapCycle, PeriodType, MacroAssumptions, CYCLE_STATUS_LABELS } from '@/types';
@@ -14,7 +15,10 @@ export const CycleListPage: React.FC = () => {
     addCycle,
     copyCycle,
     updateMacroAssumptions,
+    currentUser,
   } = useAppStore();
+
+  const isCSP = currentUser?.role === 'csp' || currentUser?.role === 'super_admin';
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
@@ -78,6 +82,15 @@ export const CycleListPage: React.FC = () => {
       )
     },
     {
+      title: 'Batas Waktu (Due Date)',
+      key: 'dueDate',
+      render: (_: any, record: RkapCycle) => (
+        <span style={{ color: record.dueDate && new Date(record.dueDate) < new Date() ? '#EF4444' : '#fff' }}>
+          {record.dueDate ? new Date(record.dueDate).toLocaleDateString('id-ID') : '-'}
+        </span>
+      )
+    },
+    {
       title: 'Versi Terkini',
       key: 'version',
       render: (_: any, record: RkapCycle) => (
@@ -89,23 +102,26 @@ export const CycleListPage: React.FC = () => {
       key: 'actions',
       render: (_: any, record: RkapCycle) => (
         <Space>
-          <Button
-            size="small"
-            icon={<SettingOutlined />}
-            onClick={() => {
-              setActiveCycleForModal(record);
-              macroForm.setFieldsValue({
-                inflationRate: record.macroAssumptions.inflationRate,
-                exchangeRateUsdIdr: record.macroAssumptions.exchangeRateUsdIdr,
-                biInterestRate: record.macroAssumptions.biInterestRate,
-                industryGrowthRate: record.macroAssumptions.industryGrowthRate,
-                taxRate: record.macroAssumptions.taxRate,
-              });
-              setIsEditMacroModalOpen(true);
-            }}
-          >
-            Asumsi Makro
-          </Button>
+          {isCSP && (
+            <Button
+              size="small"
+              icon={<SettingOutlined />}
+              onClick={() => {
+                setActiveCycleForModal(record);
+                macroForm.setFieldsValue({
+                  inflationRate: record.macroAssumptions.inflationRate,
+                  exchangeRateUsdIdr: record.macroAssumptions.exchangeRateUsdIdr,
+                  biInterestRate: record.macroAssumptions.biInterestRate,
+                  industryGrowthRate: record.macroAssumptions.industryGrowthRate,
+                  taxRate: record.macroAssumptions.taxRate,
+                  dueDate: record.dueDate ? dayjs(record.dueDate) : undefined,
+                });
+                setIsEditMacroModalOpen(true);
+              }}
+            >
+              Pengaturan Siklus
+            </Button>
+          )}
 
           <Button
             size="small"
@@ -165,9 +181,21 @@ export const CycleListPage: React.FC = () => {
     copyForm.resetFields();
   };
 
-  const handleUpdateMacro = (values: any) => {
+  const handleUpdateMacro = async (values: any) => {
     if (activeCycleForModal) {
-      updateMacroAssumptions(activeCycleForModal.id, values);
+      await updateMacroAssumptions(activeCycleForModal.id, values);
+      if (values.dueDate) {
+        await fetch(`http://localhost:3000/rkap-cycles/${activeCycleForModal.id}/due-date`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('corplan_token')}`
+          },
+          body: JSON.stringify({ dueDate: values.dueDate.toISOString() })
+        });
+        // Reload page to fetch updated cycle
+        window.location.reload();
+      }
       setIsEditMacroModalOpen(false);
     }
   };
@@ -181,23 +209,25 @@ export const CycleListPage: React.FC = () => {
             Kelola periode penyusunan target keuangan tahunan, parameter makroekonomi, dan salin siklus baseline.
           </Paragraph>
         </div>
-        <Space>
-          <Button
-            type="dashed"
-            icon={<CopyOutlined />}
-            onClick={() => setIsCopyModalOpen(true)}
-            style={{ color: '#10B981', borderColor: '#10B981' }}
-          >
-            Salin Siklus Terdekat
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            Buat Siklus Baru
-          </Button>
-        </Space>
+        {isCSP && (
+          <Space>
+            <Button
+              type="dashed"
+              icon={<CopyOutlined />}
+              onClick={() => setIsCopyModalOpen(true)}
+              style={{ color: '#10B981', borderColor: '#10B981' }}
+            >
+              Salin Siklus Terdekat
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              Buat Siklus Baru
+            </Button>
+          </Space>
+        )}
       </div>
 
       <Card>
@@ -339,9 +369,9 @@ export const CycleListPage: React.FC = () => {
         </Form>
       </Modal>
 
-      {/* EDIT MACRO MODAL */}
+      {/* EDIT MACRO / SETTINGS MODAL */}
       <Modal
-        title={`Edit Asumsi Makro — RKAP ${activeCycleForModal?.fiscalYear}`}
+        title={`Pengaturan Siklus — RKAP ${activeCycleForModal?.fiscalYear}`}
         open={isEditMacroModalOpen}
         onCancel={() => setIsEditMacroModalOpen(false)}
         onOk={() => macroForm.submit()}
@@ -385,6 +415,11 @@ export const CycleListPage: React.FC = () => {
             <Col span={12}>
               <Form.Item name="taxRate" label="Tarif Pajak PPh (%)" rules={[{ required: true }]}>
                 <InputNumber step={1} min={0} max={100} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="dueDate" label="Batas Waktu Pengumpulan (Due Date)">
+                <DatePicker style={{ width: '100%' }} format="DD MMMM YYYY" />
               </Form.Item>
             </Col>
           </Row>

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Row, Col, Typography, Collapse, Tabs, Tooltip, Tag, Statistic, Divider } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, BarChartOutlined, ArrowUpOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, BarChartOutlined, ArrowUpOutlined, InfoCircleOutlined, FilterOutlined } from '@ant-design/icons';
 import { useAppStore } from '@/stores/appStore';
 import { MonthlyGrid } from '@/components/common/MonthlyGrid';
 import { RevenueLineItem, MonthlyValues, MONTH_KEYS, MONTH_LABELS } from '@/types';
@@ -26,15 +26,24 @@ export const RevenueBudgetPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<RevenueLineItem | null>(null);
+  const [selectedDivisionFilter, setSelectedDivisionFilter] = useState<string | undefined>(undefined);
 
   const [addForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
+  const isGlobalRole = currentUser && ['super_admin', 'csp', 'cfo'].includes(currentUser.role);
 
   const activeCycle = cycles.find(c => c.id === selectedCycleId);
-  const activeRevs = revenueItems.filter(r => r.cycleId === selectedCycleId);
+  const allActiveRevs = revenueItems.filter(r => r.cycleId === selectedCycleId);
 
-  const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked';
+  const isPastDue = activeCycle?.dueDate ? new Date(activeCycle.dueDate) < new Date() : false;
+  const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked' || isPastDue;
+
+  // Filter by selected division/department
+  const activeRevs = useMemo(() => {
+    if (!selectedDivisionFilter) return allActiveRevs;
+    return allActiveRevs.filter(r => r.departmentId === selectedDivisionFilter);
+  }, [allActiveRevs, selectedDivisionFilter]);
 
   const calculateSum = (mv: MonthlyValues) => {
     return Object.values(mv).reduce((a, b) => a + b, 0);
@@ -47,6 +56,25 @@ export const RevenueBudgetPage: React.FC = () => {
   const deptOptions = departments
     .filter(d => d.isRevenueCenter)
     .map(d => ({ value: d.id, label: d.name }));
+
+  // Determine User's Division & Allowed Departments
+  const userDept = departments.find(d => d.id === currentUser?.departmentId);
+  const userDivisionId = userDept?.parentId || userDept?.id;
+  const allowedDepts = isGlobalRole
+    ? departments.filter(d => d.isRevenueCenter)
+    : departments.filter(d => d.isRevenueCenter && (d.parentId === userDivisionId || d.id === userDivisionId) && d.parentId);
+
+  const allowedDeptOptions = allowedDepts.map(d => ({ value: d.id, label: d.name }));
+
+  // Division filter options
+  const divisionFilterOptions = useMemo(() => {
+    if (!isGlobalRole && userDivisionId) {
+      const div = departments.find(d => d.id === userDivisionId && d.isRevenueCenter);
+      return div ? [{ value: div.id, label: div.name }] : [];
+    }
+    const opts = departments.filter(d => !d.parentId && d.isRevenueCenter).map(d => ({ value: d.id, label: d.name }));
+    return [{ value: '', label: 'Semua Divisi' }, ...opts];
+  }, [departments, isGlobalRole, userDivisionId]);
 
   const columns = [
     {
@@ -181,7 +209,7 @@ export const RevenueBudgetPage: React.FC = () => {
       : []),
   ];
 
-  const handleAdd = (values: any) => {
+  const handleAdd = async (values: any) => {
     const defaultMv: MonthlyValues = {
       jan: Math.round((values.volume * values.pricePerUnit * (1 - values.discountRate / 100)) / 12),
       feb: Math.round((values.volume * values.pricePerUnit * (1 - values.discountRate / 100)) / 12),
@@ -197,9 +225,11 @@ export const RevenueBudgetPage: React.FC = () => {
       dec: Math.round((values.volume * values.pricePerUnit * (1 - values.discountRate / 100)) / 12),
     };
 
-    addRevenueItem({
+    const departmentId = values.departmentId || allowedDepts[0]?.id;
+
+    const success = await addRevenueItem({
       cycleId: selectedCycleId,
-      departmentId: values.departmentId,
+      departmentId,
       accountId: values.accountId,
       productName: values.productName,
       segment: values.segment,
@@ -216,18 +246,21 @@ export const RevenueBudgetPage: React.FC = () => {
       revenueStatus: values.revenueStatus || 'sustain',
     });
 
-    setIsAddModalOpen(false);
-    addForm.resetFields();
+    if (success) {
+      setIsAddModalOpen(false);
+      addForm.resetFields();
+    }
   };
 
-  const handleEdit = (values: any) => {
+  const handleEdit = async (values: any) => {
     if (activeItem) {
-      updateRevenueItem(activeItem.id, {
+      const departmentId = values.departmentId || activeItem.departmentId;
+      const success = await updateRevenueItem(activeItem.id, {
         productName: values.productName,
         segment: values.segment,
         channel: values.channel,
         accountId: values.accountId,
-        departmentId: values.departmentId,
+        departmentId,
         assumptions: {
           volume: values.volume,
           pricePerUnit: values.pricePerUnit,
@@ -237,7 +270,9 @@ export const RevenueBudgetPage: React.FC = () => {
         project: values.project,
         revenueStatus: values.revenueStatus || 'sustain',
       });
-      setIsEditModalOpen(false);
+      if (success) {
+        setIsEditModalOpen(false);
+      }
     }
   };
 
@@ -253,15 +288,31 @@ export const RevenueBudgetPage: React.FC = () => {
             Tentukan rencana pendapatan per segmen produk, atur distribusi bulanan, dan tinjau target pertumbuhan YoY.
           </Paragraph>
         </div>
-        {!isReadOnly && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setIsAddModalOpen(true)}
-          >
-            Tambah Target Revenue
-          </Button>
-        )}
+        <Space>
+          <Select
+            style={{ minWidth: 220 }}
+            placeholder="Filter Divisi / Departemen"
+            value={selectedDivisionFilter || ''}
+            onChange={(val) => setSelectedDivisionFilter(val || undefined)}
+            options={divisionFilterOptions}
+            suffixIcon={<FilterOutlined />}
+            dropdownStyle={{ backgroundColor: '#111827' }}
+          />
+          {!isReadOnly && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                if (!isGlobalRole && userDeptId) {
+                  addForm.setFieldsValue({ departmentId: userDeptId });
+                }
+                setIsAddModalOpen(true);
+              }}
+            >
+              Tambah Target Revenue
+            </Button>
+          )}
+        </Space>
       </div>
 
       {/* Summary Row */}
@@ -340,7 +391,7 @@ export const RevenueBudgetPage: React.FC = () => {
           form={addForm}
           onFinish={handleAdd}
           layout="vertical"
-          initialValues={{ departmentId: 'd-sales', volume: 1000, pricePerUnit: 1000000, discountRate: 0, revenueStatus: 'sustain' }}
+          initialValues={{ departmentId: allowedDeptOptions[0]?.value, volume: 1000, pricePerUnit: 1000000, discountRate: 0, revenueStatus: 'sustain' }}
           style={{ marginTop: 16 }}
         >
           <Row gutter={16}>
@@ -423,7 +474,7 @@ export const RevenueBudgetPage: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item name="departmentId" label="Departemen Penanggung Jawab" rules={[{ required: true }]}>
-                <Select options={deptOptions} dropdownStyle={{ backgroundColor: '#111827' }} />
+                <Select options={allowedDeptOptions} dropdownStyle={{ backgroundColor: '#111827' }} />
               </Form.Item>
             </Col>
           </Row>
@@ -546,7 +597,7 @@ export const RevenueBudgetPage: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item name="departmentId" label="Departemen Penanggung Jawab" rules={[{ required: true }]}>
-                <Select options={deptOptions} dropdownStyle={{ backgroundColor: '#111827' }} />
+                <Select options={allowedDeptOptions} dropdownStyle={{ backgroundColor: '#111827' }} />
               </Form.Item>
             </Col>
           </Row>

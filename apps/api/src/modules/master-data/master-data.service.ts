@@ -40,7 +40,12 @@ export class MasterDataService implements OnModuleInit {
         pnl_snapshots, cashflow_snapshots, balance_sheet_snapshots CASCADE;
       `);
     } else {
-      return;
+      // Force truncate for this update to apply new roles
+      await this.departmentRepository.query(`
+        TRUNCATE TABLE users, departments, approval_workflows, approval_stages, approval_comments,
+        revenue_line_items, cost_line_items, personnel_costs, capex_items,
+        pnl_snapshots, cashflow_snapshots, balance_sheet_snapshots CASCADE;
+      `);
     }
 
     const divisions = [
@@ -62,7 +67,7 @@ export class MasterDataService implements OnModuleInit {
         { code: 'DEPT_IT', name: 'Dept Information Technology' }
       ],
       DIV_IA: [
-        { code: 'DEPT_IA', name: 'Internal Audit' }
+        { code: 'DEPT_IA', name: 'Dept Internal Audit' }
       ],
       DIV_FIN_RISK: [
         { code: 'DEPT_FIN', name: 'Dept Finance' },
@@ -79,16 +84,16 @@ export class MasterDataService implements OnModuleInit {
         { code: 'DEPT_COMP', name: 'Dept Compliance' }
       ],
       DIV_OPS: [
-        { code: 'DEPT_OPS', name: 'Operational' }
+        { code: 'DEPT_OPS', name: 'Dept Operational' }
       ],
       DIV_OPS_SUPP: [
-        { code: 'DEPT_OPS_SUPP', name: 'Operational Support' }
+        { code: 'DEPT_OPS_SUPP', name: 'Dept Operational Support' }
       ],
       DIV_BDS: [
-        { code: 'DEPT_BDS', name: 'Business Development & Support', isRevenueCenter: true }
+        { code: 'DEPT_BDS', name: 'Dept Business Development & Support', isRevenueCenter: true }
       ],
       DIV_MBS: [
-        { code: 'DEPT_MBS', name: 'Marketing & Business Sales', isRevenueCenter: true }
+        { code: 'DEPT_MBS', name: 'Dept Marketing & Business Sales', isRevenueCenter: true }
       ]
     };
 
@@ -156,54 +161,51 @@ export class MasterDataService implements OnModuleInit {
     const passwordHash = await bcrypt.hash('password123', 10);
 
     const users = [
-      // Admin & CFO
-      { email: 'admin@corplan.id', name: 'Budi Santoso', role: 'super_admin' as const, departmentId: getDeptId('DIV_CORSEC_IT') },
-      { email: 'cfo@corplan.id', name: 'Diana Wijaya', role: 'cfo' as const, departmentId: getDeptId('DIV_FIN_RISK') },
-
-      // CSP Approval
-      { email: 'csp@corplan.id', name: 'Hendra Wijaya', role: 'csp' as const, departmentId: getDeptId('DEPT_CSP') },
+      // Admin
+      { email: 'admin@corplan.id', name: 'Super Admin', role: 'super_admin' as const, departmentId: getDeptId('DIV_CORSEC_IT') },
 
       // Divisi 1: Corporate Secretary & IT
-      { email: 'gm.corsec_it@corplan.id', name: 'Gerry Mahendra (GM CorSec)', role: 'gm' as const, departmentId: getDeptId('DIV_CORSEC_IT') },
-      { email: 'bo.corcom@corplan.id', name: 'Rian Corcom (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_CORCOM') },
-      { email: 'bo.it@corplan.id', name: 'Andi IT (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_IT') },
+      { email: 'gm.corsec_it@corplan.id', name: 'GM Corporate Secretary & IT', role: 'gm' as const, departmentId: getDeptId('DIV_CORSEC_IT') },
+      { email: 'bo.corcom@corplan.id', name: 'BO Corporate Communication', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_CORCOM') },
+      { email: 'csp@corplan.id', name: 'Corporate Strategic Planning', role: 'csp' as const, departmentId: getDeptId('DEPT_CSP') },
+      { email: 'bo.it@corplan.id', name: 'BO Information Technology', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_IT') },
 
       // Divisi 2: Internal Audit
-      { email: 'gm.ia@corplan.id', name: 'Indra Aris (GM IA)', role: 'gm' as const, departmentId: getDeptId('DIV_IA') },
-      { email: 'bo.ia@corplan.id', name: 'Bayu IA (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_IA') },
+      { email: 'gm.ia@corplan.id', name: 'GM Internal Audit', role: 'gm' as const, departmentId: getDeptId('DIV_IA') },
+      { email: 'bo.ia@corplan.id', name: 'BO Internal Audit', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_IA') },
 
       // Divisi 3: Finance & Risk Management
-      { email: 'gm.fin_risk@corplan.id', name: 'Ferry Rian (GM Finance)', role: 'gm' as const, departmentId: getDeptId('DIV_FIN_RISK') },
-      { email: 'bo.finance@corplan.id', name: 'Rina Finance (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_FIN') },
-      { email: 'bo.risk@corplan.id', name: 'Rudi Risk (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_RISK') },
+      { email: 'gm.fin_risk@corplan.id', name: 'GM Finance & Risk Management', role: 'gm' as const, departmentId: getDeptId('DIV_FIN_RISK') },
+      { email: 'bo.finance@corplan.id', name: 'BO Finance', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_FIN') },
+      { email: 'bo.risk@corplan.id', name: 'BO Risk Management', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_RISK') },
 
       // Divisi 4: Procurement, Logistic & Managed Service
-      { email: 'gm.plm@corplan.id', name: 'Putra Logistik (GM PLM)', role: 'gm' as const, departmentId: getDeptId('DIV_PLM') },
-      { email: 'bo.proc@corplan.id', name: 'Prima Proc (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_PROC') },
-      { email: 'bo.ops_plm@corplan.id', name: 'Oky Ops PLM (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_OPS_PLM') },
-      { email: 'bo.log@corplan.id', name: 'Lia Logistik (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_LOG') },
+      { email: 'gm.plm@corplan.id', name: 'GM PLM', role: 'gm' as const, departmentId: getDeptId('DIV_PLM') },
+      { email: 'bo.proc@corplan.id', name: 'BO Procurement', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_PROC') },
+      { email: 'bo.ops_plm@corplan.id', name: 'BO Operational (PLM)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_OPS_PLM') },
+      { email: 'bo.log@corplan.id', name: 'BO Logistic', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_LOG') },
 
       // Divisi 5: Human Capital & Compliances
-      { email: 'gm.hcc@corplan.id', name: 'Helmi Compliances (GM HCC)', role: 'gm' as const, departmentId: getDeptId('DIV_HCC') },
-      { email: 'bo.personal@corplan.id', name: 'Pipit Personalia (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_PERS') },
-      { email: 'bo.hc@corplan.id', name: 'Hani HC (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_HC') },
-      { email: 'bo.compliance@corplan.id', name: 'Chandra Compliance (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_COMP') },
+      { email: 'gm.hcc@corplan.id', name: 'GM Human Capital & Compliances', role: 'gm' as const, departmentId: getDeptId('DIV_HCC') },
+      { email: 'bo.personal@corplan.id', name: 'BO Personalia', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_PERS') },
+      { email: 'bo.hc@corplan.id', name: 'BO Human Capital', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_HC') },
+      { email: 'bo.compliance@corplan.id', name: 'BO Compliance', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_COMP') },
 
       // Divisi 6: Operational
-      { email: 'gm.ops@corplan.id', name: 'Omar Operational (GM Ops)', role: 'gm' as const, departmentId: getDeptId('DIV_OPS') },
-      { email: 'bo.ops@corplan.id', name: 'Oman Ops (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_OPS') },
+      { email: 'gm.ops@corplan.id', name: 'GM Operational', role: 'gm' as const, departmentId: getDeptId('DIV_OPS') },
+      { email: 'bo.ops@corplan.id', name: 'BO Operational', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_OPS') },
 
       // Divisi 7: Operational Support
-      { email: 'gm.ops_supp@corplan.id', name: 'Osward Support (GM Supp)', role: 'gm' as const, departmentId: getDeptId('DIV_OPS_SUPP') },
-      { email: 'bo.ops_supp@corplan.id', name: 'Soni Supp (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_OPS_SUPP') },
+      { email: 'gm.ops_supp@corplan.id', name: 'GM Operational Support', role: 'gm' as const, departmentId: getDeptId('DIV_OPS_SUPP') },
+      { email: 'bo.ops_supp@corplan.id', name: 'BO Operational Support', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_OPS_SUPP') },
 
       // Divisi 8: Business Development & Support
-      { email: 'gm.bds@corplan.id', name: 'Bambang Dev (GM BDS)', role: 'gm' as const, departmentId: getDeptId('DIV_BDS') },
-      { email: 'bo.bds@corplan.id', name: 'Beny BDS (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_BDS') },
+      { email: 'gm.bds@corplan.id', name: 'GM Business Dev & Support', role: 'gm' as const, departmentId: getDeptId('DIV_BDS') },
+      { email: 'bo.bds@corplan.id', name: 'BO Business Dev & Support', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_BDS') },
 
       // Divisi 9: Marketing & Business Sales
-      { email: 'gm.mbs@corplan.id', name: 'Mira Marketing (GM MBS)', role: 'gm' as const, departmentId: getDeptId('DIV_MBS') },
-      { email: 'bo.mbs@corplan.id', name: 'Moni MBS (BO)', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_MBS') },
+      { email: 'gm.mbs@corplan.id', name: 'GM Marketing & Business Sales', role: 'gm' as const, departmentId: getDeptId('DIV_MBS') },
+      { email: 'bo.mbs@corplan.id', name: 'BO Marketing & Business Sales', role: 'budget_owner' as const, departmentId: getDeptId('DEPT_MBS') },
     ];
 
     for (const u of users) {

@@ -53,6 +53,7 @@ export class RkapCycleService {
     periodType: PeriodType,
     macroData: Partial<MacroAssumption>,
     createdBy: string,
+    dueDate?: string,
   ): Promise<RkapCycle> {
     const existing = await this.rkapCycleRepository.findOne({ where: { fiscalYear } });
     if (existing) {
@@ -64,6 +65,7 @@ export class RkapCycleService {
     cycle.periodType = periodType;
     cycle.status = 'draft';
     cycle.createdBy = createdBy;
+    cycle.dueDate = dueDate;
 
     const savedCycle = await this.rkapCycleRepository.save(cycle);
 
@@ -106,6 +108,13 @@ export class RkapCycleService {
     }
     Object.assign(cycle.macroAssumptions, macroData);
     await this.macroAssumptionRepository.save(cycle.macroAssumptions);
+    return this.findOne(id);
+  }
+
+  async updateDueDate(id: string, dueDate: string): Promise<RkapCycle> {
+    const cycle = await this.findOne(id);
+    cycle.dueDate = dueDate;
+    await this.rkapCycleRepository.save(cycle);
     return this.findOne(id);
   }
 

@@ -11,6 +11,7 @@ import { PnlPage } from '@/pages/projections/PnlPage';
 import { CashFlowPage } from '@/pages/projections/CashFlowPage';
 import { BalanceSheetPage } from '@/pages/projections/BalanceSheetPage';
 import { WorkflowPage } from '@/pages/workflow/WorkflowPage';
+import { SubmissionListPage } from '@/pages/workflow/SubmissionListPage';
 import { ExportPage } from '@/pages/reports/ExportPage';
 import { UserManagementPage } from '@/pages/admin/UserManagementPage';
 import { DepartmentPage } from '@/pages/admin/DepartmentPage';
@@ -36,6 +37,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="balance-sheet" element={<BalanceSheetPage />} />
         <Route path="scenario" element={<ScenarioPage />} />
         <Route path="workflow" element={<WorkflowPage />} />
+        <Route path="submissions" element={<SubmissionListPage />} />
         <Route path="export" element={<ExportPage />} />
 
         {/* Administration */}

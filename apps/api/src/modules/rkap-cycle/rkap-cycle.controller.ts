@@ -21,7 +21,7 @@ export class RkapCycleController {
 
   @Post()
   create(
-    @Body() body: { fiscalYear: number; periodType: PeriodType; macroAssumptions: any },
+    @Body() body: { fiscalYear: number; periodType: PeriodType; macroAssumptions: any, dueDate?: string },
     @CurrentUser() user: any,
   ) {
     return this.rkapCycleService.create(
@@ -29,6 +29,7 @@ export class RkapCycleController {
       body.periodType || 'monthly',
       body.macroAssumptions || {},
       user.name || user.email,
+      body.dueDate,
     );
   }
 
@@ -40,6 +41,11 @@ export class RkapCycleController {
   @Patch(':id/macro')
   updateMacro(@Param('id') id: string, @Body() macro: any) {
     return this.rkapCycleService.updateMacro(id, macro);
+  }
+
+  @Patch(':id/due-date')
+  updateDueDate(@Param('id') id: string, @Body('dueDate') dueDate: string) {
+    return this.rkapCycleService.updateDueDate(id, dueDate);
   }
 
   @Post(':id/versions')

@@ -41,4 +41,7 @@ export class RkapCycle {
 
   @Column({ name: 'locked_at', nullable: true })
   lockedAt?: string;
+
+  @Column({ name: 'due_date', nullable: true })
+  dueDate?: string;
 }

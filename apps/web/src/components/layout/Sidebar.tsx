@@ -42,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
     if (path.startsWith('/balance-sheet')) return 'balance-sheet';
     if (path.startsWith('/scenario')) return 'scenario';
     if (path.startsWith('/workflow')) return 'workflow';
+    if (path.startsWith('/submissions')) return 'submissions';
     if (path.startsWith('/export')) return 'export';
     if (path.startsWith('/admin/users')) return 'admin-users';
     if (path.startsWith('/admin/coa')) return 'admin-coa';
@@ -62,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
       case 'balance-sheet': navigate('/balance-sheet'); break;
       case 'scenario': navigate('/scenario'); break;
       case 'workflow': navigate('/workflow'); break;
+      case 'submissions': navigate('/submissions'); break;
       case 'export': navigate('/export'); break;
       case 'admin-users': navigate('/admin/users'); break;
       case 'admin-coa': navigate('/admin/coa'); break;
@@ -155,9 +157,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
       label: collapsed ? null : 'Fitur Pendukung',
       children: [
         {
+          key: 'submissions',
+          icon: <SolutionOutlined />,
+          label: 'Daftar Pengajuan',
+        },
+        {
           key: 'workflow',
           icon: <SolutionOutlined />,
-          label: 'Workflow Approval',
+          label: 'Workflow Divisi',
         },
         {
           key: 'export',

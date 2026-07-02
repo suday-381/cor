@@ -23,10 +23,11 @@ export class WorkflowController {
   submit(
     @Body('cycleId') cycleId: string,
     @Body('departmentId') departmentId: string,
+    @Body('submissionName') submissionName: string,
     @CurrentUser() user: User,
   ) {
     const resolvedDeptId = departmentId || user.departmentId;
-    return this.workflowService.submit(cycleId, resolvedDeptId, user);
+    return this.workflowService.submit(cycleId, resolvedDeptId, user, submissionName);
   }
 
   @Post('approve')

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { message } from 'antd';
 import type {
   User, UserRole, RkapCycle, CycleStatus, PeriodType, MacroAssumptions,
   RevenueLineItem, CostLineItem, PersonnelCost, PnlSnapshot, PnlSummary,
@@ -41,26 +42,26 @@ interface AppState {
 
   // Revenue
   revenueItems: RevenueLineItem[];
-  addRevenueItem: (item: Omit<RevenueLineItem, 'id'>) => Promise<void>;
-  updateRevenueItem: (id: string, updates: Partial<RevenueLineItem>) => Promise<void>;
+  addRevenueItem: (item: Omit<RevenueLineItem, 'id'>) => Promise<boolean>;
+  updateRevenueItem: (id: string, updates: Partial<RevenueLineItem>) => Promise<boolean>;
   deleteRevenueItem: (id: string) => Promise<void>;
 
   // Cost
   costItems: CostLineItem[];
-  addCostItem: (item: Omit<CostLineItem, 'id'>) => Promise<void>;
-  updateCostItem: (id: string, updates: Partial<CostLineItem>) => Promise<void>;
+  addCostItem: (item: Omit<CostLineItem, 'id'>) => Promise<boolean>;
+  updateCostItem: (id: string, updates: Partial<CostLineItem>) => Promise<boolean>;
   deleteCostItem: (id: string) => Promise<void>;
 
   // Personnel
   personnelItems: PersonnelCost[];
-  addPersonnelItem: (item: Omit<PersonnelCost, 'id'>) => Promise<void>;
-  updatePersonnelItem: (id: string, updates: Partial<PersonnelCost>) => Promise<void>;
+  addPersonnelItem: (item: Omit<PersonnelCost, 'id'>) => Promise<boolean>;
+  updatePersonnelItem: (id: string, updates: Partial<PersonnelCost>) => Promise<boolean>;
   deletePersonnelItem: (id: string) => Promise<void>;
 
   // CapEx
   capexItems: CapExItem[];
-  addCapExItem: (item: Omit<CapExItem, 'id'>) => Promise<void>;
-  updateCapExItem: (id: string, updates: Partial<CapExItem>) => Promise<void>;
+  addCapExItem: (item: Omit<CapExItem, 'id'>) => Promise<boolean>;
+  updateCapExItem: (id: string, updates: Partial<CapExItem>) => Promise<boolean>;
   deleteCapExItem: (id: string) => Promise<void>;
 
   // Calculations & Projections
@@ -72,7 +73,7 @@ interface AppState {
 
   // Workflow
   workflow: ApprovalWorkflow | null;
-  submitWorkflow: (departmentId?: string) => Promise<void>;
+  submitWorkflow: (submissionName: string, departmentId?: string) => Promise<void>;
   approveWorkflowStage: (comment: string, departmentId?: string) => Promise<void>;
   rejectWorkflowStage: (comment: string, departmentId?: string) => Promise<void>;
   reviseWorkflow: (departmentId?: string) => Promise<void>;
@@ -298,8 +299,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newItem = await api.post<RevenueLineItem>('/revenue', item);
       set(state => ({ revenueItems: [...state.revenueItems, newItem] }));
       await get().recalculateAll();
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal menambahkan data pendapatan.');
+      return false;
     }
   },
   updateRevenueItem: async (id, updates) => {
@@ -309,8 +313,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         revenueItems: state.revenueItems.map(item => item.id === id ? updated : item)
       }));
       await get().recalculateAll();
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal memperbarui data pendapatan.');
+      return false;
     }
   },
   deleteRevenueItem: async (id) => {
@@ -320,8 +327,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         revenueItems: state.revenueItems.filter(item => item.id !== id)
       }));
       await get().recalculateAll();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal menghapus data pendapatan.');
     }
   },
 
@@ -332,8 +340,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newItem = await api.post<CostLineItem>('/cost/line-items', item);
       set(state => ({ costItems: [...state.costItems, newItem] }));
       await get().recalculateAll();
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal menambahkan data biaya.');
+      return false;
     }
   },
   updateCostItem: async (id, updates) => {
@@ -343,8 +354,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         costItems: state.costItems.map(item => item.id === id ? updated : item)
       }));
       await get().recalculateAll();
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal memperbarui data biaya.');
+      return false;
     }
   },
   deleteCostItem: async (id) => {
@@ -354,8 +368,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         costItems: state.costItems.filter(item => item.id !== id)
       }));
       await get().recalculateAll();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal menghapus data biaya.');
     }
   },
 
@@ -366,8 +381,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newItem = await api.post<PersonnelCost>('/cost/personnel', item);
       set(state => ({ personnelItems: [...state.personnelItems, newItem] }));
       await get().recalculateAll();
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal menambahkan data personalia.');
+      return false;
     }
   },
   updatePersonnelItem: async (id, updates) => {
@@ -377,8 +395,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         personnelItems: state.personnelItems.map(item => item.id === id ? updated : item)
       }));
       await get().recalculateAll();
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal memperbarui data personalia.');
+      return false;
     }
   },
   deletePersonnelItem: async (id) => {
@@ -388,8 +409,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         personnelItems: state.personnelItems.filter(item => item.id !== id)
       }));
       await get().recalculateAll();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal menghapus data personalia.');
     }
   },
 
@@ -400,8 +422,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newItem = await api.post<CapExItem>('/capex', item);
       set(state => ({ capexItems: [...state.capexItems, newItem] }));
       await get().recalculateAll();
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal menambahkan data CapEx.');
+      return false;
     }
   },
   updateCapExItem: async (id, updates) => {
@@ -411,8 +436,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         capexItems: state.capexItems.map(item => item.id === id ? updated : item)
       }));
       await get().recalculateAll();
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal memperbarui data CapEx.');
+      return false;
     }
   },
   deleteCapExItem: async (id) => {
@@ -422,8 +450,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         capexItems: state.capexItems.filter(item => item.id !== id)
       }));
       await get().recalculateAll();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      message.error(err?.message || 'Gagal menghapus data CapEx.');
     }
   },
 
@@ -475,18 +504,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Workflow
   workflow: mockWorkflow,
-  submitWorkflow: async (departmentId) => {
+  submitWorkflow: async (submissionName, departmentId) => {
     try {
       const cycleId = get().selectedCycleId;
       if (!cycleId) return;
-      const deptId = departmentId || get().currentUser?.departmentId;
-      const workflow = await api.post<ApprovalWorkflow>('/workflow/submit', { cycleId, departmentId: deptId });
-      set({ workflow });
-      set(state => ({
-        cycles: state.cycles.map(c => c.id === cycleId ? { ...c, status: 'in_review' } : c)
-      }));
-    } catch (err) {
-      console.error(err);
+      const res = await api.post<ApprovalWorkflow>('/workflow/submit', { cycleId, departmentId, submissionName });
+      set({ workflow: res });
+      
+      const dept = get().departments.find(d => d.id === (departmentId || get().currentUser?.departmentId));
+      await get().addAuditLog('submit', `Workflow pengajuan RKAP divisi ${dept?.name || ''} diajukan ke GM`, 'Workflow', res.id);
+      message.success('RKAP berhasil diajukan untuk direview!');
+    } catch (err: any) {
+      console.error('Submit workflow error:', err);
+      message.error(err.response?.data?.message || 'Gagal mengajukan RKAP');
     }
   },
   approveWorkflowStage: async (comment, departmentId) => {

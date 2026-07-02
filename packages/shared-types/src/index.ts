@@ -85,6 +85,7 @@ export interface RkapCycle {
   createdAt: string;
   updatedAt: string;
   lockedAt?: string;
+  dueDate?: string;
 }
 
 export const CYCLE_STATUS_LABELS: Record<CycleStatus, string> = {
@@ -373,6 +374,8 @@ export interface ApprovalWorkflow {
   submittedAt?: string;
   completedAt?: string;
   departmentId?: string;
+  submissionName?: string;
+  submissionVersion?: number;
 }
 
 /* ========== Notification Types ========== */

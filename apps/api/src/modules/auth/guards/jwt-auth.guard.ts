@@ -19,6 +19,7 @@ export class JwtAuthGuard implements CanActivate {
       request['user'] = {
         ...payload,
         id: payload.sub,
+        departmentId: payload.departmentId,
       };
     } catch {
       throw new UnauthorizedException('Invalid or expired authorization token');
