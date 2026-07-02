@@ -86,12 +86,10 @@ export const LoginPage: React.FC = () => {
               options={[
                 { value: 'super_admin', label: 'Super Admin / IT' },
                 { value: 'cfo', label: 'CFO / Direktur Keuangan' },
-                { value: 'finance_manager', label: 'Finance Manager' },
-                { value: 'dept_head', label: 'Kepala Departemen (Ops/Sales)' },
-                { value: 'staff_finance', label: 'Staff Keuangan' },
-                { value: 'csp_senior_manager', label: 'CSP Senior Manager (Business Dept)' },
-                { value: 'gm_csp_finance', label: 'GM CSP & Finance (Business Dept)' },
-                { value: 'viewer', label: 'Viewer (Direksi Non-Fin)' },
+                { value: 'csp', label: 'Corporate Strategic Planning (CSP)' },
+                { value: 'gm', label: 'General Manager Divisi' },
+                { value: 'budget_owner', label: 'Budget Owner Departemen' },
+                { value: 'viewer', label: 'Viewer (View Only)' },
               ]}
             />
           </Form.Item>
@@ -119,9 +117,9 @@ export const LoginPage: React.FC = () => {
                 size="small"
                 type="dashed"
                 style={{ width: '100%', fontSize: '0.75rem' }}
-                onClick={() => handleQuickLogin('finance@corplan.id', 'finance_manager')}
+                onClick={() => handleQuickLogin('bo.finance@corplan.id', 'budget_owner')}
               >
-                1. Finance Mgr
+                1. BO Finance
               </Button>
             </Col>
             <Col span={12}>
@@ -129,19 +127,39 @@ export const LoginPage: React.FC = () => {
                 size="small"
                 type="dashed"
                 style={{ width: '100%', fontSize: '0.75rem' }}
-                onClick={() => handleQuickLogin('cfo@corplan.id', 'cfo')}
+                onClick={() => handleQuickLogin('gm.fin_risk@corplan.id', 'gm')}
               >
-                2. CFO / Direktur
+                2. GM Finance & Risk
               </Button>
             </Col>
             <Col span={12}>
               <Button
                 size="small"
                 type="dashed"
-                style={{ width: '100%', fontSize: '0.75rem' }}
-                onClick={() => handleQuickLogin('sales@corplan.id', 'dept_head')}
+                style={{ width: '100%', fontSize: '0.75rem', borderColor: '#EC4899', color: '#EC4899' }}
+                onClick={() => handleQuickLogin('csp@corplan.id', 'csp')}
               >
-                3. Dept. Head (Sales)
+                3. CSP Approval
+              </Button>
+            </Col>
+            <Col span={12}>
+              <Button
+                size="small"
+                type="dashed"
+                style={{ width: '100%', fontSize: '0.75rem', borderColor: '#8B5CF6', color: '#8B5CF6' }}
+                onClick={() => handleQuickLogin('bo.mbs@corplan.id', 'budget_owner')}
+              >
+                4. BO Marketing (MBS)
+              </Button>
+            </Col>
+            <Col span={12}>
+              <Button
+                size="small"
+                type="dashed"
+                style={{ width: '100%', fontSize: '0.75rem', borderColor: '#8B5CF6', color: '#8B5CF6' }}
+                onClick={() => handleQuickLogin('gm.mbs@corplan.id', 'gm')}
+              >
+                5. GM Marketing (MBS)
               </Button>
             </Col>
             <Col span={12}>
@@ -151,27 +169,7 @@ export const LoginPage: React.FC = () => {
                 style={{ width: '100%', fontSize: '0.75rem' }}
                 onClick={() => handleQuickLogin('admin@corplan.id', 'super_admin')}
               >
-                4. Super Admin
-              </Button>
-            </Col>
-            <Col span={12}>
-              <Button
-                size="small"
-                type="dashed"
-                style={{ width: '100%', fontSize: '0.75rem', borderColor: '#EC4899', color: '#EC4899' }}
-                onClick={() => handleQuickLogin('csp@corplan.id', 'csp_senior_manager')}
-              >
-                5. CSP Sr Mgr
-              </Button>
-            </Col>
-            <Col span={12}>
-              <Button
-                size="small"
-                type="dashed"
-                style={{ width: '100%', fontSize: '0.75rem', borderColor: '#8B5CF6', color: '#8B5CF6' }}
-                onClick={() => handleQuickLogin('gm@corplan.id', 'gm_csp_finance')}
-              >
-                6. GM CSP & Fin
+                6. Super Admin
               </Button>
             </Col>
           </Row>

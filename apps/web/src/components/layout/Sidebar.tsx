@@ -70,7 +70,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
     }
   };
 
-  const isAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'finance_manager';
+  const departments = useAppStore(state => state.departments);
+  const userDept = departments.find(d => d.id === currentUser?.departmentId);
+  const isBdsOrMbs = userDept && (
+    userDept.code === 'DIV_BDS' || 
+    userDept.code === 'DIV_MBS' || 
+    userDept.code === 'DEPT_BDS' || 
+    userDept.code === 'DEPT_MBS'
+  );
+
+  const isGlobalRole = currentUser && ['super_admin', 'csp', 'cfo'].includes(currentUser.role);
+  const showRevenue = isGlobalRole || isBdsOrMbs;
+  const isFinanceOrCsp = isGlobalRole || (userDept && (userDept.code === 'DEPT_FIN' || userDept.code === 'DIV_FIN_RISK'));
+  const isAdmin = currentUser?.role === 'super_admin';
 
   const menuItems = [
     {
@@ -87,11 +99,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
           icon: <CalendarOutlined />,
           label: 'Siklus RKAP',
         },
-        {
-          key: 'revenue',
-          icon: <LineChartOutlined />,
-          label: 'Anggaran Pendapatan',
-        },
+        ...(showRevenue
+          ? [
+              {
+                key: 'revenue',
+                icon: <LineChartOutlined />,
+                label: 'Anggaran Pendapatan',
+              },
+            ]
+          : []),
         {
           key: 'costs',
           icon: <DollarOutlined />,
@@ -113,16 +129,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
           icon: <PieChartOutlined />,
           label: 'Proyeksi Laba Rugi',
         },
-        {
-          key: 'cashflow',
-          icon: <SolutionOutlined />,
-          label: 'Proyeksi Arus Kas',
-        },
-        {
-          key: 'balance-sheet',
-          icon: <AccountBookOutlined />,
-          label: 'Proyeksi Neraca',
-        },
+        ...(isFinanceOrCsp
+          ? [
+              {
+                key: 'cashflow',
+                icon: <SolutionOutlined />,
+                label: 'Proyeksi Arus Kas',
+              },
+              {
+                key: 'balance-sheet',
+                icon: <AccountBookOutlined />,
+                label: 'Proyeksi Neraca',
+              },
+            ]
+          : []),
         {
           key: 'scenario',
           icon: <SlidersOutlined />,

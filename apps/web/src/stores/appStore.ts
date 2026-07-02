@@ -75,6 +75,7 @@ interface AppState {
   submitWorkflow: (departmentId?: string) => Promise<void>;
   approveWorkflowStage: (comment: string, departmentId?: string) => Promise<void>;
   rejectWorkflowStage: (comment: string, departmentId?: string) => Promise<void>;
+  reviseWorkflow: (departmentId?: string) => Promise<void>;
   loadWorkflow: (cycleId: string, departmentId?: string) => Promise<void>;
 
   // Notifications
@@ -514,6 +515,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       set(state => ({
         cycles: state.cycles.map(c => c.id === cycleId ? { ...c, status: 'draft' } : c)
       }));
+    } catch (err) {
+      console.error(err);
+    }
+  },
+  reviseWorkflow: async (departmentId) => {
+    try {
+      const cycleId = get().selectedCycleId;
+      if (!cycleId) return;
+      const deptId = departmentId || get().currentUser?.departmentId;
+      const workflow = await api.post<ApprovalWorkflow>('/workflow/revise', { cycleId, departmentId: deptId });
+      set({ workflow });
     } catch (err) {
       console.error(err);
     }

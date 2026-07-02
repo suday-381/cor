@@ -3,6 +3,8 @@ import { CostService } from './cost.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CostLineItem } from './entities/cost-line-item.entity';
 import { PersonnelCost } from './entities/personnel-cost.entity';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '../users/user.entity';
 
 @Controller('cost')
 @UseGuards(JwtAuthGuard)
@@ -14,8 +16,9 @@ export class CostController {
   findAllLineItems(
     @Query('cycleId') cycleId: string,
     @Query('departmentId') departmentId?: string,
+    @CurrentUser() user?: User,
   ) {
-    return this.costService.findAllLineItems(cycleId, departmentId);
+    return this.costService.findAllLineItems(cycleId, departmentId, user);
   }
 
   @Get('line-items/:id')
@@ -24,18 +27,18 @@ export class CostController {
   }
 
   @Post('line-items')
-  createLineItem(@Body() data: Partial<CostLineItem>) {
-    return this.costService.createLineItem(data);
+  createLineItem(@Body() data: Partial<CostLineItem>, @CurrentUser() user: User) {
+    return this.costService.createLineItem(data, user);
   }
 
   @Patch('line-items/:id')
-  updateLineItem(@Param('id') id: string, @Body() updates: Partial<CostLineItem>) {
-    return this.costService.updateLineItem(id, updates);
+  updateLineItem(@Param('id') id: string, @Body() updates: Partial<CostLineItem>, @CurrentUser() user: User) {
+    return this.costService.updateLineItem(id, updates, user);
   }
 
   @Delete('line-items/:id')
-  removeLineItem(@Param('id') id: string) {
-    return this.costService.removeLineItem(id);
+  removeLineItem(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.costService.removeLineItem(id, user);
   }
 
   // Personnel Costs
@@ -43,8 +46,9 @@ export class CostController {
   findAllPersonnel(
     @Query('cycleId') cycleId: string,
     @Query('departmentId') departmentId?: string,
+    @CurrentUser() user?: User,
   ) {
-    return this.costService.findAllPersonnel(cycleId, departmentId);
+    return this.costService.findAllPersonnel(cycleId, departmentId, user);
   }
 
   @Get('personnel/:id')
@@ -53,17 +57,17 @@ export class CostController {
   }
 
   @Post('personnel')
-  createPersonnel(@Body() data: Partial<PersonnelCost>) {
-    return this.costService.createPersonnel(data);
+  createPersonnel(@Body() data: Partial<PersonnelCost>, @CurrentUser() user: User) {
+    return this.costService.createPersonnel(data, user);
   }
 
   @Patch('personnel/:id')
-  updatePersonnel(@Param('id') id: string, @Body() updates: Partial<PersonnelCost>) {
-    return this.costService.updatePersonnel(id, updates);
+  updatePersonnel(@Param('id') id: string, @Body() updates: Partial<PersonnelCost>, @CurrentUser() user: User) {
+    return this.costService.updatePersonnel(id, updates, user);
   }
 
   @Delete('personnel/:id')
-  removePersonnel(@Param('id') id: string) {
-    return this.costService.removePersonnel(id);
+  removePersonnel(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.costService.removePersonnel(id, user);
   }
 }

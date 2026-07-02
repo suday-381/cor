@@ -17,6 +17,9 @@ export class CashFlowSnapshot {
   @Column({ type: 'int' })
   version: number;
 
+  @Column({ name: 'division_id', nullable: true })
+  divisionId?: string;
+
   @Column({ type: 'jsonb', name: 'operating_activities' })
   operatingActivities: {
     netIncome: MonthlyValues;

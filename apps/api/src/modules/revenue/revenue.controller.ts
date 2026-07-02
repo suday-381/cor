@@ -2,6 +2,8 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } f
 import { RevenueService } from './revenue.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RevenueLineItem } from './entities/revenue-line-item.entity';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '../users/user.entity';
 
 @Controller('revenue')
 @UseGuards(JwtAuthGuard)
@@ -12,8 +14,9 @@ export class RevenueController {
   findAll(
     @Query('cycleId') cycleId: string,
     @Query('departmentId') departmentId?: string,
+    @CurrentUser() user?: User,
   ) {
-    return this.revenueService.findAllByCycle(cycleId, departmentId);
+    return this.revenueService.findAllByCycle(cycleId, departmentId, user);
   }
 
   @Get(':id')
@@ -22,17 +25,17 @@ export class RevenueController {
   }
 
   @Post()
-  create(@Body() data: Partial<RevenueLineItem>) {
-    return this.revenueService.create(data);
+  create(@Body() data: Partial<RevenueLineItem>, @CurrentUser() user: User) {
+    return this.revenueService.create(data, user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updates: Partial<RevenueLineItem>) {
-    return this.revenueService.update(id, updates);
+  update(@Param('id') id: string, @Body() updates: Partial<RevenueLineItem>, @CurrentUser() user: User) {
+    return this.revenueService.update(id, updates, user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.revenueService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.revenueService.remove(id, user);
   }
 }

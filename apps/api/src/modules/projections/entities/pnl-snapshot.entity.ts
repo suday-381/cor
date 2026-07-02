@@ -17,6 +17,9 @@ export class PnlSnapshot {
   @Column({ type: 'int' })
   version: number;
 
+  @Column({ name: 'division_id', nullable: true })
+  divisionId?: string;
+
   @Column({ type: 'jsonb' })
   summary: PnlSummary;
 

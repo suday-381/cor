@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { ApprovalWorkflow } from './entities/approval-workflow.entity';
@@ -7,6 +7,7 @@ import { ApprovalComment } from './entities/approval-comment.entity';
 import { RkapCycle } from '../rkap-cycle/entities/rkap-cycle.entity';
 import { Department } from '../master-data/entities/department.entity';
 import { User } from '../users/user.entity';
+import { ProjectionsService } from '../projections/projections.service';
 
 @Injectable()
 export class WorkflowService {
@@ -21,10 +22,52 @@ export class WorkflowService {
     private readonly cycleRepository: Repository<RkapCycle>,
     @InjectRepository(Department)
     private readonly departmentRepository: Repository<Department>,
+    @Inject(forwardRef(() => ProjectionsService))
+    private readonly projectionsService: ProjectionsService,
   ) {}
 
   private isUuid(str: string): boolean {
     return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str);
+  }
+
+  async resolveDivisionId(departmentId?: string): Promise<string | undefined> {
+    if (!departmentId) return undefined;
+    if (!this.isUuid(departmentId)) return undefined;
+    const dept = await this.departmentRepository.findOne({ where: { id: departmentId } });
+    if (!dept) return undefined;
+    if (dept.parentId) {
+      return dept.parentId; // Return division ID
+    }
+    return dept.id; // It is already a division
+  }
+
+  async getDivisionDepartmentIds(departmentId?: string): Promise<string[]> {
+    const divisionId = await this.resolveDivisionId(departmentId);
+    if (!divisionId) return [];
+    const depts = await this.departmentRepository.find({
+      where: [{ parentId: divisionId }, { id: divisionId }],
+    });
+    return depts.map(d => d.id);
+  }
+
+  addDocumentStatus(wf: ApprovalWorkflow): any {
+    if (!wf) return wf;
+    let documentStatus = 'Draft';
+    if (wf.status === 'approved') {
+      documentStatus = 'Approve';
+    } else if (wf.status === 'rejected') {
+      documentStatus = 'Reject';
+    } else if (wf.status === 'in_progress') {
+      if (wf.currentStageIndex === 1) {
+        documentStatus = 'In Review GM';
+      } else if (wf.currentStageIndex === 2) {
+        documentStatus = 'In Review CSP';
+      } else {
+        documentStatus = 'In Review';
+      }
+    }
+    (wf as any).documentStatus = documentStatus;
+    return wf;
   }
 
   async getWorkflow(cycleId: string, departmentId?: string): Promise<ApprovalWorkflow> {
@@ -32,100 +75,53 @@ export class WorkflowService {
       throw new NotFoundException(`Siklus RKAP dengan ID ${cycleId} tidak ditemukan`);
     }
 
-    const whereClause: any = { cycleId };
-    if (departmentId) {
-      whereClause.departmentId = departmentId;
-    } else {
-      whereClause.departmentId = IsNull();
+    const divisionId = await this.resolveDivisionId(departmentId);
+    if (!divisionId) {
+      throw new BadRequestException('ID Divisi/Departemen tidak valid atau tidak ditemukan');
     }
 
     let workflow = await this.workflowRepository.findOne({
-      where: whereClause,
+      where: { cycleId, departmentId: divisionId },
       relations: ['stages', 'stages.comments'],
     });
 
     if (!workflow) {
-      // In order to check department code, we need to load it
-      let isBusinessDept = false;
-      if (departmentId) {
-        const dept = await this.departmentRepository.findOne({ where: { id: departmentId } });
-        if (dept && (dept.code === 'SAL' || dept.code === 'OPS' || dept.isRevenueCenter)) {
-          isBusinessDept = true;
-        }
-      }
-
-      // Initialize workflow
+      // Create division workflow
       workflow = new ApprovalWorkflow();
       workflow.cycleId = cycleId;
-      workflow.departmentId = departmentId;
+      workflow.departmentId = divisionId;
       workflow.status = 'pending';
       workflow.currentStageIndex = 0;
       const savedWf = await this.workflowRepository.save(workflow);
 
       const stages: ApprovalStage[] = [];
 
-      if (isBusinessDept) {
-        // Stage 0: Penyusunan Anggaran (completed by default)
-        const stage0 = new ApprovalStage();
-        stage0.workflowId = savedWf.id;
-        stage0.stageName = 'Penyusunan Anggaran';
-        stage0.approverRole = 'finance_manager';
-        stage0.status = 'approved';
-        stage0.sortOrder = 0;
-        stages.push(stage0);
+      // Stage 0: Penyusunan Anggaran (approved by default)
+      const stage0 = new ApprovalStage();
+      stage0.workflowId = savedWf.id;
+      stage0.stageName = 'Penyusunan Anggaran';
+      stage0.approverRole = 'budget_owner';
+      stage0.status = 'approved';
+      stage0.sortOrder = 0;
+      stages.push(stage0);
 
-        // Stage 1: Review/Approval CSP Senior Manager
-        const stage1 = new ApprovalStage();
-        stage1.workflowId = savedWf.id;
-        stage1.stageName = 'Review CSP Senior Manager';
-        stage1.approverRole = 'csp_senior_manager';
-        stage1.status = 'pending';
-        stage1.sortOrder = 1;
-        stages.push(stage1);
+      // Stage 1: Review General Manager Divisi
+      const stage1 = new ApprovalStage();
+      stage1.workflowId = savedWf.id;
+      stage1.stageName = 'Review General Manager Divisi';
+      stage1.approverRole = 'gm';
+      stage1.status = 'pending';
+      stage1.sortOrder = 1;
+      stages.push(stage1);
 
-        // Stage 2: Persetujuan GM CSP & Finance
-        const stage2 = new ApprovalStage();
-        stage2.workflowId = savedWf.id;
-        stage2.stageName = 'Persetujuan GM CSP & Finance';
-        stage2.approverRole = 'gm_csp_finance';
-        stage2.status = 'pending';
-        stage2.sortOrder = 2;
-        stages.push(stage2);
-
-        // Stage 3: Persetujuan CFO
-        const stage3 = new ApprovalStage();
-        stage3.workflowId = savedWf.id;
-        stage3.stageName = 'Persetujuan CFO';
-        stage3.approverRole = 'cfo';
-        stage3.status = 'pending';
-        stage3.sortOrder = 3;
-        stages.push(stage3);
-      } else {
-        // Standard stages
-        const stage0 = new ApprovalStage();
-        stage0.workflowId = savedWf.id;
-        stage0.stageName = 'Penyusunan Anggaran';
-        stage0.approverRole = 'finance_manager';
-        stage0.status = 'approved';
-        stage0.sortOrder = 0;
-        stages.push(stage0);
-
-        const stage1 = new ApprovalStage();
-        stage1.workflowId = savedWf.id;
-        stage1.stageName = 'Review Finance Manager';
-        stage1.approverRole = 'finance_manager';
-        stage1.status = 'pending';
-        stage1.sortOrder = 1;
-        stages.push(stage1);
-
-        const stage2 = new ApprovalStage();
-        stage2.workflowId = savedWf.id;
-        stage2.stageName = 'Persetujuan CFO';
-        stage2.approverRole = 'cfo';
-        stage2.status = 'pending';
-        stage2.sortOrder = 2;
-        stages.push(stage2);
-      }
+      // Stage 2: Persetujuan Corporate Strategic Planning
+      const stage2 = new ApprovalStage();
+      stage2.workflowId = savedWf.id;
+      stage2.stageName = 'Persetujuan Corporate Strategic Planning';
+      stage2.approverRole = 'csp';
+      stage2.status = 'pending';
+      stage2.sortOrder = 2;
+      stages.push(stage2);
 
       await this.stageRepository.save(stages);
 
@@ -143,15 +139,15 @@ export class WorkflowService {
       workflow.stages = [];
     }
 
-    // Sort stages by sortOrder
     workflow.stages.sort((a, b) => a.sortOrder - b.sortOrder);
-
-    return workflow;
+    return this.addDocumentStatus(workflow);
   }
 
   async submit(cycleId: string, departmentId: string | undefined, user: User): Promise<ApprovalWorkflow> {
-    const wf = await this.getWorkflow(cycleId, departmentId);
-    if (!wf || !wf.stages || wf.stages.length < 2) {
+    const divisionId = await this.resolveDivisionId(departmentId || user.departmentId);
+    const wf = await this.getWorkflow(cycleId, divisionId);
+
+    if (!wf || !wf.stages || wf.stages.length < 3) {
       throw new BadRequestException('Workflow tidak valid atau belum diinisialisasi');
     }
     if (wf.status === 'in_progress' || wf.status === 'approved') {
@@ -163,7 +159,6 @@ export class WorkflowService {
     wf.submittedAt = new Date().toISOString();
 
     wf.stages.sort((a, b) => a.sortOrder - b.sortOrder);
-
     wf.stages[0].status = 'approved';
     wf.stages[0].decidedAt = new Date().toISOString();
     wf.stages[1].status = 'pending';
@@ -172,14 +167,16 @@ export class WorkflowService {
     await this.stageRepository.save(wf.stages[1]);
     await this.workflowRepository.save(wf);
 
-    // Sync cycle status
-    await this.cycleRepository.update(cycleId, { status: 'in_review' });
+    // Recalculate division projections to draft status
+    await this.projectionsService.recalculate(cycleId, undefined, divisionId);
 
-    return this.getWorkflow(cycleId, departmentId);
+    return this.getWorkflow(cycleId, divisionId);
   }
 
   async approveStage(cycleId: string, departmentId: string | undefined, commentText: string, user: User): Promise<ApprovalWorkflow> {
-    const wf = await this.getWorkflow(cycleId, departmentId);
+    const divisionId = await this.resolveDivisionId(departmentId || user.departmentId);
+    const wf = await this.getWorkflow(cycleId, divisionId);
+
     if (!wf || !wf.stages || wf.stages.length === 0) {
       throw new BadRequestException('Workflow tidak valid atau belum diinisialisasi');
     }
@@ -211,13 +208,13 @@ export class WorkflowService {
 
     const nextIdx = currentIdx + 1;
     if (nextIdx >= wf.stages.length) {
-      // Completed approval
+      // Completed approval (Approved by CSP)
       wf.status = 'approved';
       wf.completedAt = new Date().toISOString();
       await this.workflowRepository.save(wf);
 
-      // Sync cycle status
-      await this.cycleRepository.update(cycleId, { status: 'approved' });
+      // Trigger global projections recalculation since this division is approved
+      await this.projectionsService.recalculate(cycleId);
     } else {
       wf.currentStageIndex = nextIdx;
       wf.stages[nextIdx].status = 'pending';
@@ -225,11 +222,13 @@ export class WorkflowService {
       await this.workflowRepository.save(wf);
     }
 
-    return this.getWorkflow(cycleId, departmentId);
+    return this.getWorkflow(cycleId, divisionId);
   }
 
   async rejectStage(cycleId: string, departmentId: string | undefined, commentText: string, user: User): Promise<ApprovalWorkflow> {
-    const wf = await this.getWorkflow(cycleId, departmentId);
+    const divisionId = await this.resolveDivisionId(departmentId || user.departmentId);
+    const wf = await this.getWorkflow(cycleId, divisionId);
+
     if (!wf || !wf.stages || wf.stages.length === 0) {
       throw new BadRequestException('Workflow tidak valid atau belum diinisialisasi');
     }
@@ -266,9 +265,70 @@ export class WorkflowService {
     wf.status = 'rejected';
     await this.workflowRepository.save(wf);
 
-    // Sync cycle status to draft (so it can be revised)
-    await this.cycleRepository.update(cycleId, { status: 'draft' });
+    return this.getWorkflow(cycleId, divisionId);
+  }
 
-    return this.getWorkflow(cycleId, departmentId);
+  async reviseWorkflow(cycleId: string, departmentId: string | undefined, user: User): Promise<ApprovalWorkflow> {
+    const divisionId = await this.resolveDivisionId(departmentId || user.departmentId);
+    const wf = await this.getWorkflow(cycleId, divisionId);
+
+    if (!wf) {
+      throw new NotFoundException('Workflow tidak ditemukan');
+    }
+    if (wf.status !== 'rejected') {
+      throw new BadRequestException('Hanya workflow dengan status ditolak (Reject) yang dapat direvisi');
+    }
+
+    wf.status = 'pending';
+    wf.currentStageIndex = 0;
+    
+    // Reset stages
+    if (!wf.stages || wf.stages.length < 3) {
+      throw new BadRequestException('Tahapan workflow tidak lengkap untuk direvisi');
+    }
+
+    wf.stages.sort((a, b) => a.sortOrder - b.sortOrder);
+    wf.stages[0].status = 'approved';
+    wf.stages[1].status = 'pending';
+    wf.stages[2].status = 'pending';
+
+    await this.stageRepository.save(wf.stages[0]);
+    await this.stageRepository.save(wf.stages[1]);
+    await this.stageRepository.save(wf.stages[2]);
+    await this.workflowRepository.save(wf);
+
+    return this.getWorkflow(cycleId, divisionId);
+  }
+
+  async getDivisionsWorkflowStatus(cycleId: string) {
+    // Fetch all parent divisions (parentId = null)
+    const divisions = await this.departmentRepository.find({
+      where: { parentId: IsNull() },
+      order: { sortOrder: 'ASC' },
+    });
+
+    const result = [];
+    for (const div of divisions) {
+      let wf = await this.workflowRepository.findOne({
+        where: { cycleId, departmentId: div.id },
+      });
+
+      const finalWf = wf || ({
+        status: 'pending',
+        currentStageIndex: 0,
+      } as any);
+      const wfWithStatus = this.addDocumentStatus(finalWf);
+      result.push({
+        divisionId: div.id,
+        divisionName: div.name,
+        divisionCode: div.code,
+        status: wfWithStatus.status,
+        documentStatus: (wfWithStatus as any).documentStatus,
+        submittedAt: wfWithStatus.submittedAt || null,
+        completedAt: wfWithStatus.completedAt || null,
+      });
+    }
+
+    return result;
   }
 }

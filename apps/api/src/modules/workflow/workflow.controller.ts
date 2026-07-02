@@ -50,4 +50,19 @@ export class WorkflowController {
     const resolvedDeptId = departmentId || user.departmentId;
     return this.workflowService.rejectStage(cycleId, resolvedDeptId, comment, user);
   }
+
+  @Post('revise')
+  revise(
+    @Body('cycleId') cycleId: string,
+    @Body('departmentId') departmentId: string,
+    @CurrentUser() user: User,
+  ) {
+    const resolvedDeptId = departmentId || user.departmentId;
+    return this.workflowService.reviseWorkflow(cycleId, resolvedDeptId, user);
+  }
+
+  @Get('divisions')
+  getDivisionsWorkflowStatus(@Query('cycleId') cycleId: string) {
+    return this.workflowService.getDivisionsWorkflowStatus(cycleId);
+  }
 }

@@ -1,13 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Typography, Row, Col, Card, Statistic, Alert, Tag, Tooltip, Button, Form, InputNumber, Divider, Modal } from 'antd';
+import { Typography, Row, Col, Card, Statistic, Alert, Tag, Tooltip, Button, Form, InputNumber, Divider, Modal, Select, Space } from 'antd';
 import { CheckCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined, SettingOutlined } from '@ant-design/icons';
 import { useAppStore } from '@/stores/appStore';
 import { FinancialTable, FinancialRow } from '@/components/common/FinancialTable';
+import { api } from '@/utils/api';
+import { BalanceSheetSnapshot } from '@/types';
 
 const { Title, Text, Paragraph } = Typography;
 
 export const BalanceSheetPage: React.FC = () => {
-  const { selectedCycleId, balanceSheetSnapshot, recalculateAll, cycles, updateMacroAssumptions } = useAppStore();
+  const { selectedCycleId, cycles, updateMacroAssumptions, currentUser, departments } = useAppStore();
+  const [selectedDivId, setSelectedDivId] = useState<string>('all');
+  const [bsData, setBsData] = useState<BalanceSheetSnapshot | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [divisionList, setDivisionList] = useState<any[]>([]);
+
   const [isPrevBsOpen, setIsPrevBsOpen] = useState(false);
   const [prevBsForm] = Form.useForm();
 
@@ -32,11 +39,54 @@ export const BalanceSheetPage: React.FC = () => {
     reserves: 1000000000,
   };
 
-  const activeCycle = cycles.find(c => c.id === selectedCycleId);
+  const userDept = departments.find(d => d.id === currentUser?.departmentId);
+  const userDivId = userDept ? (userDept.parentId || userDept.id) : '';
+  const isGlobalUser = ['super_admin', 'csp', 'cfo'].includes(currentUser?.role || '');
+
+  // Load divisions list
+  useEffect(() => {
+    if (selectedCycleId) {
+      api.get<any[]>('/workflow/divisions', { cycleId: selectedCycleId })
+        .then(res => setDivisionList(res))
+        .catch(err => console.error(err));
+    }
+  }, [selectedCycleId]);
+
+  // Load Balance Sheet data dynamically
+  const fetchBalanceSheet = () => {
+    if (selectedCycleId && departments.length > 0) {
+      setLoading(true);
+      const activeDivId = isGlobalUser ? selectedDivId : userDivId;
+      api.get<BalanceSheetSnapshot>('/projections/balancesheet', {
+        cycleId: selectedCycleId,
+        divisionId: activeDivId === 'all' ? undefined : activeDivId
+      })
+      .then(res => {
+        setBsData(res);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setBsData(null);
+        setLoading(false);
+      });
+    }
+  };
 
   useEffect(() => {
-    recalculateAll();
-  }, [selectedCycleId]);
+    fetchBalanceSheet();
+  }, [selectedCycleId, selectedDivId, currentUser, departments, isGlobalUser, userDivId]);
+
+  // Sync defaults
+  useEffect(() => {
+    if (!isGlobalUser && userDivId) {
+      setSelectedDivId(userDivId);
+    } else if (isGlobalUser) {
+      setSelectedDivId('all');
+    }
+  }, [isGlobalUser, userDivId]);
+
+  const activeCycle = cycles.find(c => c.id === selectedCycleId);
 
   useEffect(() => {
     if (activeCycle) {
@@ -49,27 +99,26 @@ export const BalanceSheetPage: React.FC = () => {
       await updateMacroAssumptions(activeCycle.id, {
         previousBalanceSheet: values,
       });
-      await recalculateAll();
+      fetchBalanceSheet();
       setIsPrevBsOpen(false);
     }
   };
 
   const getBalanceSheetRows = (): FinancialRow[] => {
-    if (!balanceSheetSnapshot) return [];
+    if (!bsData) return [];
 
-    const ca = balanceSheetSnapshot.currentAssets;
-    const nca = balanceSheetSnapshot.nonCurrentAssets;
-    const cl = balanceSheetSnapshot.currentLiabilities;
-    const ltl = balanceSheetSnapshot.longTermLiabilities;
-    const eq = balanceSheetSnapshot.equity;
+    const ca = bsData.currentAssets;
+    const nca = bsData.nonCurrentAssets;
+    const cl = bsData.currentLiabilities;
+    const ltl = bsData.longTermLiabilities;
+    const eq = bsData.equity;
 
     return [
-      // === ASET ===
       {
         key: 'assets-header',
         name: 'ASET',
         isHeader: true,
-        values: balanceSheetSnapshot.totalAssets
+        values: bsData.totalAssets
       },
       {
         key: 'current-assets-header',
@@ -130,7 +179,7 @@ export const BalanceSheetPage: React.FC = () => {
         indent: 1,
         tooltip: 'Akumulasi beban depresiasi bulanan (nilai negatif)',
         values: Object.fromEntries(
-          Object.entries(nca.accumulatedDepreciation).map(([k, v]) => [k, -v])
+          Object.entries(nca.accumulatedDepreciation || {}).map(([k, v]) => [k, -v])
         ) as any
       },
       {
@@ -157,23 +206,22 @@ export const BalanceSheetPage: React.FC = () => {
         isSubtotal: true,
         values: nca.totalNonCurrentAssets
       },
-
       {
         key: 'total-assets',
         name: 'TOTAL ASET',
         isTotal: true,
-        values: balanceSheetSnapshot.totalAssets
+        values: bsData.totalAssets
       },
 
       // === LIABILITAS ===
       {
-        key: 'liab-header',
-        name: 'LIABILITAS & EKUITAS',
+        key: 'liabilities-header',
+        name: 'LIABILITAS',
         isHeader: true,
-        values: balanceSheetSnapshot.totalLiabilitiesAndEquity
+        values: bsData.totalLiabilities
       },
       {
-        key: 'current-liab-header',
+        key: 'current-liabilities-header',
         name: 'LIABILITAS JANGKA PENDEK',
         isHeader: true,
         values: cl.totalCurrentLiabilities
@@ -182,24 +230,24 @@ export const BalanceSheetPage: React.FC = () => {
         key: 'ap-bs',
         name: 'Utang Usaha',
         indent: 1,
-        tooltip: 'Tagihan vendor terutang yang belum dibayar',
+        tooltip: 'Utang pembelian bahan baku/jasa ke pemasok',
         values: cl.accountsPayable
       },
       {
         key: 'tax-pay',
-        name: 'Utang Pajak',
+        name: 'Utang Pajak (PPh)',
         indent: 1,
         values: cl.taxPayable
       },
       {
         key: 'accrued-exp',
-        name: 'Biaya Masih Harus Dibayar',
+        name: 'Beban Akrual / Masih Harus Dibayar',
         indent: 1,
         values: cl.accruedExpenses
       },
       {
         key: 'st-debt',
-        name: 'Utang Bank Jangka Pendek',
+        name: 'Utang Jangka Pendek',
         indent: 1,
         values: cl.shortTermDebt
       },
@@ -211,7 +259,7 @@ export const BalanceSheetPage: React.FC = () => {
       },
 
       {
-        key: 'long-term-liab-header',
+        key: 'long-term-liabilities-header',
         name: 'LIABILITAS JANGKA PANJANG',
         isHeader: true,
         values: ltl.totalLongTermLiabilities
@@ -220,11 +268,12 @@ export const BalanceSheetPage: React.FC = () => {
         key: 'lt-debt',
         name: 'Utang Bank Jangka Panjang',
         indent: 1,
+        tooltip: 'Utang jangka panjang outstanding dikurangi cicilan tahun berjalan',
         values: ltl.longTermDebt
       },
       {
         key: 'bonds',
-        name: 'Obligasi / Surat Utang',
+        name: 'Obligasi / Surat Utang Jangka Panjang',
         indent: 1,
         values: ltl.bonds
       },
@@ -240,12 +289,11 @@ export const BalanceSheetPage: React.FC = () => {
         isSubtotal: true,
         values: ltl.totalLongTermLiabilities
       },
-
       {
-        key: 'total-liab',
-        name: 'Total Liabilitas',
+        key: 'total-liabilities',
+        name: 'TOTAL LIABILITAS',
         isSubtotal: true,
-        values: balanceSheetSnapshot.totalLiabilities
+        values: bsData.totalLiabilities
       },
 
       // === EKUITAS ===
@@ -285,13 +333,13 @@ export const BalanceSheetPage: React.FC = () => {
         key: 'total-le',
         name: 'TOTAL LIABILITAS DAN EKUITAS',
         isTotal: true,
-        values: balanceSheetSnapshot.totalLiabilitiesAndEquity
+        values: bsData.totalLiabilitiesAndEquity
       }
     ];
   };
 
-  const isBalanced = balanceSheetSnapshot?.isBalanced ?? true;
-  const ratio = balanceSheetSnapshot?.financialRatios;
+  const isBalanced = bsData?.isBalanced ?? true;
+  const ratio = bsData?.financialRatios;
 
   // Grab Dec values for card statistics
   const currentRatioDec = ratio ? Object.values(ratio.currentRatio)[11] : 0;
@@ -299,34 +347,95 @@ export const BalanceSheetPage: React.FC = () => {
   const roeDec = ratio ? Object.values(ratio.roe)[11] : 0;
   const roaDec = ratio ? Object.values(ratio.roa)[11] : 0;
 
+  // Dropdown options
+  const divs = departments.filter(d => !d.parentId);
+  const divOptions = [
+    { value: 'all', label: 'Semua Divisi (Global)' },
+    ...divs.map(d => ({ value: d.id, label: d.name }))
+  ];
+
+  const renderChecklist = () => {
+    if (!isGlobalUser || selectedDivId !== 'all') return null;
+    return (
+      <Card
+        title={<span style={{ color: '#fff', fontSize: '0.95rem' }}>Status Approval Divisi (Masuk Proyeksi Global)</span>}
+        style={{ marginBottom: 20, background: '#111827', borderColor: 'rgba(255,255,255,0.06)' }}
+        bodyStyle={{ padding: 12 }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+          {divisionList.map(div => {
+            const isApproved = div.documentStatus === 'Approve';
+            return (
+              <div
+                key={div.divisionId}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 12px',
+                  background: isApproved ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                  borderRadius: 6,
+                  border: `1px solid ${isApproved ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.06)'}`
+                }}
+              >
+                <span style={{ color: isApproved ? '#10B981' : '#9CA3AF', fontSize: '1rem', display: 'flex', alignItems: 'center' }}>
+                  {isApproved ? '☑' : '☐'}
+                </span>
+                <Text style={{ color: isApproved ? '#fff' : 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
+                  {div.divisionName}
+                </Text>
+                <Tag color={isApproved ? 'success' : (div.documentStatus === 'Reject' ? 'error' : 'default')} style={{ margin: 0, fontSize: '0.7rem' }}>
+                  {div.documentStatus || 'Draft'}
+                </Tag>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    );
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <Title level={2} style={{ color: '#fff', margin: 0 }}>Proyeksi Neraca (Balance Sheet)</Title>
           <Paragraph style={{ color: 'rgba(255,255,255,0.45)', margin: 0 }}>
-            Tinjau proyeksi posisi keuangan (Aset, Liabilitas, Ekuitas). Formula otomatis memastikan persamaan dasar akuntansi tetap seimbang.
+            Tinjau proyeksi posisi keuangan (Aset, Liabilitas, Ekuitas) divisi.
           </Paragraph>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <Button
-            type="default"
-            icon={<SettingOutlined />}
-            onClick={() => setIsPrevBsOpen(true)}
-          >
-            Neraca Tahun Sebelumnya
-          </Button>
+        <Space align="center" size={16}>
+          <span style={{ color: '#9CA3AF' }}>Filter Divisi:</span>
+          <Select
+            value={isGlobalUser ? selectedDivId : userDivId}
+            onChange={setSelectedDivId}
+            disabled={!isGlobalUser}
+            style={{ width: 280 }}
+            dropdownStyle={{ backgroundColor: '#111827' }}
+            options={divOptions}
+          />
+          {isGlobalUser && (
+            <Button
+              type="default"
+              icon={<SettingOutlined />}
+              onClick={() => setIsPrevBsOpen(true)}
+            >
+              Neraca Tahun Sebelumnya
+            </Button>
+          )}
           {isBalanced ? (
-            <Tag color="success" icon={<CheckCircleOutlined />} style={{ fontSize: '1rem', padding: '6px 12px', borderRadius: 8 }}>
+            <Tag color="success" icon={<CheckCircleOutlined />} style={{ fontSize: '0.95rem', padding: '6px 12px', borderRadius: 8 }}>
               Neraca Seimbang (Balanced)
             </Tag>
           ) : (
-            <Tag color="error" icon={<ExclamationCircleOutlined />} style={{ fontSize: '1rem', padding: '6px 12px', borderRadius: 8 }}>
+            <Tag color="error" icon={<ExclamationCircleOutlined />} style={{ fontSize: '0.95rem', padding: '6px 12px', borderRadius: 8 }}>
               Neraca Tidak Seimbang!
             </Tag>
           )}
-        </div>
+        </Space>
       </div>
+
+      {renderChecklist()}
 
       {!isBalanced && (
         <Alert
@@ -410,6 +519,7 @@ export const BalanceSheetPage: React.FC = () => {
       <FinancialTable
         title={`Proyeksi Neraca — RKAP ${activeCycle?.fiscalYear}`}
         rows={getBalanceSheetRows()}
+        loading={loading}
       />
 
       {/* PREVIOUS YEAR BALANCE SHEET MODAL */}
@@ -433,7 +543,6 @@ export const BalanceSheetPage: React.FC = () => {
           </Paragraph>
 
           <Row gutter={24}>
-            {/* ASET */}
             <Col span={12}>
               <Divider orientation="left" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>Aset (Assets)</Divider>
               
@@ -470,7 +579,6 @@ export const BalanceSheetPage: React.FC = () => {
               </Form.Item>
             </Col>
 
-            {/* LIABILITAS & EKUITAS */}
             <Col span={12}>
               <Divider orientation="left" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>Liabilitas (Liabilities)</Divider>
 

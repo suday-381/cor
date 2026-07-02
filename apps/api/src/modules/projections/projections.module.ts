@@ -11,6 +11,9 @@ import { CapExItem } from '../capex/entities/capex-item.entity';
 import { ProjectionsService } from './projections.service';
 import { ProjectionsController } from './projections.controller';
 
+import { ApprovalWorkflow } from '../workflow/entities/approval-workflow.entity';
+import { Department } from '../master-data/entities/department.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -22,6 +25,8 @@ import { ProjectionsController } from './projections.controller';
       CostLineItem,
       PersonnelCost,
       CapExItem,
+      ApprovalWorkflow,
+      Department,
     ]),
   ],
   providers: [ProjectionsService],

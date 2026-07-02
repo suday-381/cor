@@ -17,6 +17,9 @@ export class BalanceSheetSnapshot {
   @Column({ type: 'int' })
   version: number;
 
+  @Column({ name: 'division_id', nullable: true })
+  divisionId?: string;
+
   @Column({ type: 'jsonb', name: 'current_assets' })
   currentAssets: {
     cashAndEquivalents: MonthlyValues;

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In, IsNull } from 'typeorm';
 import { PnlSnapshot } from './entities/pnl-snapshot.entity';
 import { CashFlowSnapshot } from './entities/cashflow-snapshot.entity';
 import { BalanceSheetSnapshot } from './entities/balance-sheet-snapshot.entity';
@@ -10,12 +10,14 @@ import { CostLineItem } from '../cost/entities/cost-line-item.entity';
 import { PersonnelCost } from '../cost/entities/personnel-cost.entity';
 import { CapExItem } from '../capex/entities/capex-item.entity';
 import { MonthlyValues, WorkingCapitalAssumptions } from '@corplan/shared-types';
+import { ApprovalWorkflow } from '../workflow/entities/approval-workflow.entity';
+import { Department } from '../master-data/entities/department.entity';
 
 @Injectable()
 export class ProjectionsService {
   constructor(
     @InjectRepository(PnlSnapshot)
-    private readonly pnlRepository: Repository<PnlSnapshot>,
+    public readonly pnlRepository: Repository<PnlSnapshot>,
     @InjectRepository(CashFlowSnapshot)
     private readonly cashFlowRepository: Repository<CashFlowSnapshot>,
     @InjectRepository(BalanceSheetSnapshot)
@@ -30,18 +32,22 @@ export class ProjectionsService {
     private readonly personnelRepository: Repository<PersonnelCost>,
     @InjectRepository(CapExItem)
     private readonly capexRepository: Repository<CapExItem>,
+    @InjectRepository(ApprovalWorkflow)
+    private readonly workflowRepository: Repository<ApprovalWorkflow>,
+    @InjectRepository(Department)
+    public readonly departmentRepository: Repository<Department>,
   ) {}
 
   private isUuid(str: string): boolean {
     return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str);
   }
 
-  async getPnl(cycleId: string): Promise<PnlSnapshot> {
+  async getPnl(cycleId: string, divisionId?: string): Promise<PnlSnapshot> {
     if (!this.isUuid(cycleId)) {
-      throw new NotFoundException(`Snapshot P&L untuk siklus ${cycleId} belum tersedia. Silakan jalankan kalkulasi.`);
+      throw new NotFoundException(`Snapshot P&L untuk siklus ${cycleId} belum tersedia.`);
     }
     const snapshot = await this.pnlRepository.findOne({
-      where: { cycleId },
+      where: { cycleId, divisionId: divisionId || IsNull() },
       order: { calculatedAt: 'DESC' },
     });
     if (!snapshot) {
@@ -50,12 +56,12 @@ export class ProjectionsService {
     return snapshot;
   }
 
-  async getCashFlow(cycleId: string): Promise<CashFlowSnapshot> {
+  async getCashFlow(cycleId: string, divisionId?: string): Promise<CashFlowSnapshot> {
     if (!this.isUuid(cycleId)) {
-      throw new NotFoundException(`Snapshot Cash Flow untuk siklus ${cycleId} belum tersedia. Silakan jalankan kalkulasi.`);
+      throw new NotFoundException(`Snapshot Cash Flow untuk siklus ${cycleId} belum tersedia.`);
     }
     const snapshot = await this.cashFlowRepository.findOne({
-      where: { cycleId },
+      where: { cycleId, divisionId: divisionId || IsNull() },
       order: { calculatedAt: 'DESC' },
     });
     if (!snapshot) {
@@ -64,12 +70,12 @@ export class ProjectionsService {
     return snapshot;
   }
 
-  async getBalanceSheet(cycleId: string): Promise<BalanceSheetSnapshot> {
+  async getBalanceSheet(cycleId: string, divisionId?: string): Promise<BalanceSheetSnapshot> {
     if (!this.isUuid(cycleId)) {
-      throw new NotFoundException(`Snapshot Balance Sheet untuk siklus ${cycleId} belum tersedia. Silakan jalankan kalkulasi.`);
+      throw new NotFoundException(`Snapshot Balance Sheet untuk siklus ${cycleId} belum tersedia.`);
     }
     const snapshot = await this.balanceSheetRepository.findOne({
-      where: { cycleId },
+      where: { cycleId, divisionId: divisionId || IsNull() },
       order: { calculatedAt: 'DESC' },
     });
     if (!snapshot) {
@@ -78,7 +84,11 @@ export class ProjectionsService {
     return snapshot;
   }
 
-  async recalculate(cycleId: string, wc?: WorkingCapitalAssumptions): Promise<{
+  async recalculate(
+    cycleId: string,
+    wc?: WorkingCapitalAssumptions,
+    divisionId?: string,
+  ): Promise<{
     pnl: PnlSnapshot;
     cashflow: CashFlowSnapshot;
     balancesheet: BalanceSheetSnapshot;
@@ -94,10 +104,47 @@ export class ProjectionsService {
       throw new NotFoundException(`Siklus RKAP dengan ID ${cycleId} tidak ditemukan`);
     }
 
-    const revenues = await this.revenueRepository.find({ where: { cycleId } });
-    const costs = await this.costRepository.find({ where: { cycleId } });
-    const personnel = await this.personnelRepository.find({ where: { cycleId } });
-    const capex = await this.capexRepository.find({ where: { cycleId } });
+    let deptIds: string[] = [];
+    let isGlobal = true;
+
+    if (divisionId) {
+      // 1. Division recalculation
+      isGlobal = false;
+      const allowedDepts = await this.departmentRepository.find({
+        where: [{ parentId: divisionId }, { id: divisionId }],
+      });
+      deptIds = allowedDepts.map(d => d.id);
+    } else {
+      // 2. Global rollup (Approved divisions only)
+      isGlobal = true;
+      const approvedWfs = await this.workflowRepository.find({
+        where: { cycleId, status: 'approved' },
+      });
+      const approvedDivisionIds = approvedWfs.map(w => w.departmentId);
+      
+      if (approvedDivisionIds.length > 0) {
+        const allowedDepts = await this.departmentRepository.find({
+          where: [{ parentId: In(approvedDivisionIds) }, { id: In(approvedDivisionIds) }],
+        });
+        deptIds = allowedDepts.map(d => d.id);
+      } else {
+        deptIds = [];
+      }
+    }
+
+    // Retrieve input data
+    const revenues = deptIds.length > 0 
+      ? await this.revenueRepository.find({ where: { cycleId, departmentId: In(deptIds) } })
+      : [];
+    const costs = deptIds.length > 0 
+      ? await this.costRepository.find({ where: { cycleId, departmentId: In(deptIds) } })
+      : [];
+    const personnel = deptIds.length > 0 
+      ? await this.personnelRepository.find({ where: { cycleId, departmentId: In(deptIds) } })
+      : [];
+    const capex = deptIds.length > 0 
+      ? await this.capexRepository.find({ where: { cycleId, departmentId: In(deptIds) } })
+      : [];
 
     const currentWc = wc || { dso: 45, dio: 30, dpo: 35 };
 
@@ -110,27 +157,42 @@ export class ProjectionsService {
       wcAssumptions: currentWc,
     };
 
-    let calcResult: any = null;
-    const calcEngineUrl = process.env.CALC_ENGINE_URL || 'http://localhost:8000';
+    // Calculate main
+    const calcResult = this.calculateFallback(payload);
 
-    try {
-      const response = await fetch(`${calcEngineUrl}/calculate/all`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+    // Calculate division breakdown for global PnL
+    const byDepartment: Record<string, any> = {};
+    if (isGlobal) {
+      const approvedWfs = await this.workflowRepository.find({
+        where: { cycleId, status: 'approved' },
       });
+      const approvedDivisionIds = approvedWfs.map(w => w.departmentId);
 
-      if (response.ok) {
-        calcResult = await response.json();
-      } else {
-        console.warn(`Calc Engine returned error ${response.status}. Using fallback local calculation.`);
+      for (const divId of approvedDivisionIds) {
+        const divDepts = await this.departmentRepository.find({
+          where: [{ parentId: divId }, { id: divId }],
+        });
+        const divDeptIds = divDepts.map(d => d.id);
+
+        const divRevenues = revenues.filter(r => divDeptIds.includes(r.departmentId));
+        const divCosts = costs.filter(c => divDeptIds.includes(c.departmentId));
+        const divPersonnel = personnel.filter(p => divDeptIds.includes(p.departmentId));
+        const divCapex = capex.filter(cap => divDeptIds.includes(cap.departmentId));
+
+        const payloadDiv = {
+          macroAssumptions: cycle.macroAssumptions,
+          revenues: divRevenues,
+          costs: divCosts,
+          personnel: divPersonnel,
+          capex: divCapex,
+          wcAssumptions: currentWc,
+        };
+
+        const divCalc = this.calculateFallback(payloadDiv);
+        if (divId) {
+          byDepartment[divId] = divCalc.pnl.summary || divCalc.pnl;
+        }
       }
-    } catch (err) {
-      console.warn(`Could not connect to Calc Engine at ${calcEngineUrl}: ${err.message}. Using fallback local calculation.`);
-    }
-
-    if (!calcResult) {
-      calcResult = this.calculateFallback(payload);
     }
 
     const versionNum = cycle.versions && cycle.versions.length > 0 
@@ -138,23 +200,29 @@ export class ProjectionsService {
       : 1;
 
     // Save P&L Snapshot
-    let pnl = await this.pnlRepository.findOne({ where: { cycleId, version: versionNum } });
+    let pnl = await this.pnlRepository.findOne({
+      where: { cycleId, version: versionNum, divisionId: divisionId || IsNull() },
+    });
     if (!pnl) {
       pnl = new PnlSnapshot();
       pnl.cycleId = cycleId;
       pnl.version = versionNum;
+      pnl.divisionId = divisionId || undefined;
     }
     pnl.summary = calcResult.pnl.summary || calcResult.pnl;
-    pnl.byDepartment = calcResult.pnl.byDepartment || {};
+    pnl.byDepartment = isGlobal ? byDepartment : {};
     pnl.calculatedAt = new Date().toISOString();
     const savedPnl = await this.pnlRepository.save(pnl);
 
     // Save Cash Flow Snapshot
-    let cf = await this.cashFlowRepository.findOne({ where: { cycleId, version: versionNum } });
+    let cf = await this.cashFlowRepository.findOne({
+      where: { cycleId, version: versionNum, divisionId: divisionId || IsNull() },
+    });
     if (!cf) {
       cf = new CashFlowSnapshot();
       cf.cycleId = cycleId;
       cf.version = versionNum;
+      cf.divisionId = divisionId || undefined;
     }
     cf.operatingActivities = calcResult.cashflow.operatingActivities;
     cf.investingActivities = calcResult.cashflow.investingActivities;
@@ -167,11 +235,14 @@ export class ProjectionsService {
     const savedCf = await this.cashFlowRepository.save(cf);
 
     // Save Balance Sheet Snapshot
-    let bs = await this.balanceSheetRepository.findOne({ where: { cycleId, version: versionNum } });
+    let bs = await this.balanceSheetRepository.findOne({
+      where: { cycleId, version: versionNum, divisionId: divisionId || IsNull() },
+    });
     if (!bs) {
       bs = new BalanceSheetSnapshot();
       bs.cycleId = cycleId;
       bs.version = versionNum;
+      bs.divisionId = divisionId || undefined;
     }
     bs.currentAssets = calcResult.balancesheet.currentAssets;
     bs.nonCurrentAssets = calcResult.balancesheet.nonCurrentAssets;
@@ -237,7 +308,7 @@ export class ProjectionsService {
     });
 
     const cogs = createEmptyMv();
-    costs.filter((c: any) => c.category === 'variable' || c.departmentId === 'd-prod').forEach((c: any) => {
+    costs.filter((c: any) => c.category === 'variable').forEach((c: any) => {
       monthKeys.forEach(m => {
         cogs[m] += Number(c.monthlyAmounts?.[m] || 0);
       });
@@ -257,7 +328,7 @@ export class ProjectionsService {
     });
 
     const opex = createEmptyMv();
-    costs.filter((c: any) => c.category !== 'variable' && c.departmentId !== 'd-prod').forEach((c: any) => {
+    costs.filter((c: any) => c.category !== 'variable').forEach((c: any) => {
       monthKeys.forEach(m => {
         opex[m] += Number(c.monthlyAmounts?.[m] || 0);
       });

@@ -1,6 +1,8 @@
 /* ========== User & Auth Types ========== */
 
-export type UserRole = 'super_admin' | 'cfo' | 'finance_manager' | 'dept_head' | 'staff_finance' | 'viewer' | 'csp_senior_manager' | 'gm_csp_finance';
+export type UserRole = 'super_admin' | 'cfo' | 'finance_manager' | 'dept_head' | 'staff_finance' | 'viewer' | 'csp_senior_manager' | 'gm_csp_finance' | 'gm' | 'budget_owner' | 'csp';
+
+export type DocumentStatus = 'Draft' | 'In Review GM' | 'In Review CSP' | 'Approve' | 'Reject';
 
 export interface User {
   id: string;
@@ -24,6 +26,9 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   viewer: 'Viewer',
   csp_senior_manager: 'CSP Senior Manager',
   gm_csp_finance: 'GM CSP & Finance',
+  gm: 'General Manager Divisi',
+  budget_owner: 'Budget Owner',
+  csp: 'Corporate Strategic Planning',
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -35,6 +40,9 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   viewer: '#6B7280',
   csp_senior_manager: '#EC4899',
   gm_csp_finance: '#8B5CF6',
+  gm: '#10B981',
+  budget_owner: '#F59E0B',
+  csp: '#EC4899',
 };
 
 /* ========== RKAP Cycle Types (Modul 1) ========== */
