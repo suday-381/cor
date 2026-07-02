@@ -41,4 +41,7 @@ export class PersonnelCost {
 
   @Column({ type: 'decimal', name: 'total_annual', precision: 18, scale: 2 })
   totalAnnual: number;
+
+  @Column({ type: 'varchar', name: 'cost_category', default: 'opex' })
+  costCategory: 'cogs' | 'opex';
 }

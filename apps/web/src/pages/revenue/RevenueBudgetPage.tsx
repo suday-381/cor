@@ -4,6 +4,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, BarChartOutlined, ArrowUpOu
 import { useAppStore } from '@/stores/appStore';
 import { MonthlyGrid } from '@/components/common/MonthlyGrid';
 import { RevenueLineItem, MonthlyValues, MONTH_KEYS, MONTH_LABELS } from '@/types';
+import { formatCurrency } from '@/utils/format';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -19,6 +20,7 @@ export const RevenueBudgetPage: React.FC = () => {
     coa,
     departments,
     currentUser,
+    displayUnit,
   } = useAppStore();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -34,10 +36,6 @@ export const RevenueBudgetPage: React.FC = () => {
 
   const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked';
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-  };
-
   const calculateSum = (mv: MonthlyValues) => {
     return Object.values(mv).reduce((a, b) => a + b, 0);
   };
@@ -52,6 +50,18 @@ export const RevenueBudgetPage: React.FC = () => {
 
   const columns = [
     {
+      title: 'Pelanggan & Proyek',
+      key: 'customerProject',
+      render: (_: any, record: RevenueLineItem) => (
+        <div>
+          <Text strong style={{ color: '#fff' }}>{record.customer || '-'}</Text>
+          <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)' }}>
+            Proyek: {record.project || '-'}
+          </div>
+        </div>
+      )
+    },
+    {
       title: 'Produk / Layanan',
       dataIndex: 'productName',
       key: 'productName',
@@ -63,6 +73,19 @@ export const RevenueBudgetPage: React.FC = () => {
           </div>
         </div>
       )
+    },
+    {
+      title: 'Status',
+      dataIndex: 'revenueStatus',
+      key: 'revenueStatus',
+      render: (status?: string) => {
+        const isSustain = (status || 'sustain') === 'sustain';
+        return (
+          <Tag color={isSustain ? 'blue' : 'purple'}>
+            {isSustain ? 'Sustain' : 'Scaling'}
+          </Tag>
+        );
+      }
     },
     {
       title: 'Akun Pendapatan',
@@ -79,7 +102,7 @@ export const RevenueBudgetPage: React.FC = () => {
       render: (_: any, record: RevenueLineItem) => (
         <Space direction="vertical" size={2}>
           <span>Vol: <Text strong style={{ color: '#fff' }}>{record.assumptions.volume.toLocaleString('id-ID')}</Text></span>
-          <span>Harga: <Text strong style={{ color: '#fff' }}>{formatCurrency(record.assumptions.pricePerUnit)}</Text></span>
+          <span>Harga: <Text strong style={{ color: '#fff' }}>{formatCurrency(record.assumptions.pricePerUnit, displayUnit)}</Text></span>
           <span>Diskon: <Text strong style={{ color: '#EF4444' }}>{record.assumptions.discountRate}%</Text></span>
         </Space>
       )
@@ -89,7 +112,7 @@ export const RevenueBudgetPage: React.FC = () => {
       key: 'prevYear',
       render: (_: any, record: RevenueLineItem) => {
         const sum = record.previousYear ? calculateSum(record.previousYear) : 0;
-        return <span className="font-mono text-muted">{formatCurrency(sum)}</span>;
+        return <span className="font-mono text-muted">{formatCurrency(sum, displayUnit)}</span>;
       }
     },
     {
@@ -97,7 +120,7 @@ export const RevenueBudgetPage: React.FC = () => {
       key: 'targetYear',
       render: (_: any, record: RevenueLineItem) => {
         const sum = calculateSum(record.monthlyTargets);
-        return <span className="font-mono text-positive" style={{ fontWeight: 600 }}>{formatCurrency(sum)}</span>;
+        return <span className="font-mono text-positive" style={{ fontWeight: 600 }}>{formatCurrency(sum, displayUnit)}</span>;
       }
     },
     {
@@ -106,7 +129,7 @@ export const RevenueBudgetPage: React.FC = () => {
       render: (_: any, record: RevenueLineItem) => {
         const targetSum = calculateSum(record.monthlyTargets);
         const prevSum = record.previousYear ? calculateSum(record.previousYear) : 0;
-        if (prevSum === 0) return <Tag color="success">New</Tag>;
+        if (prevSum === 0) return <Tag color="success">+100.0% (YoY)</Tag>;
         const growth = ((targetSum - prevSum) / prevSum) * 100;
         return (
           <Tag color={growth >= 0 ? 'success' : 'error'}>
@@ -136,6 +159,9 @@ export const RevenueBudgetPage: React.FC = () => {
                       volume: record.assumptions.volume,
                       pricePerUnit: record.assumptions.pricePerUnit,
                       discountRate: record.assumptions.discountRate,
+                      customer: record.customer,
+                      project: record.project,
+                      revenueStatus: record.revenueStatus || 'sustain',
                     });
                     setIsEditModalOpen(true);
                   }}
@@ -184,7 +210,10 @@ export const RevenueBudgetPage: React.FC = () => {
         pricePerUnit: values.pricePerUnit,
         discountRate: values.discountRate,
       },
-      previousYear: { ...defaultMv, jan: Math.round(defaultMv.jan * 0.9) } // Mock prev year
+      previousYear: { ...defaultMv, jan: Math.round(defaultMv.jan * 0.9) }, // Mock prev year
+      customer: values.customer,
+      project: values.project,
+      revenueStatus: values.revenueStatus || 'sustain',
     });
 
     setIsAddModalOpen(false);
@@ -203,7 +232,10 @@ export const RevenueBudgetPage: React.FC = () => {
           volume: values.volume,
           pricePerUnit: values.pricePerUnit,
           discountRate: values.discountRate,
-        }
+        },
+        customer: values.customer,
+        project: values.project,
+        revenueStatus: values.revenueStatus || 'sustain',
       });
       setIsEditModalOpen(false);
     }
@@ -239,14 +271,14 @@ export const RevenueBudgetPage: React.FC = () => {
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.45)' }}>TOTAL TARGET REVENUE TAHUNAN</span>}
               value={totalTargetRevenue}
-              formatter={value => <span className="font-mono text-positive" style={{ fontSize: '2rem', fontWeight: 700 }}>{formatCurrency(Number(value))}</span>}
+              formatter={value => <span className="font-mono text-positive" style={{ fontSize: '2rem', fontWeight: 700 }}>{formatCurrency(Number(value), displayUnit)}</span>}
             />
             {totalPrevRevenue > 0 && (
               <div style={{ marginTop: 8 }}>
                 <Tag color="success">
                   <ArrowUpOutlined /> {(((totalTargetRevenue - totalPrevRevenue) / totalPrevRevenue) * 100).toFixed(1)}% pertumbuhan YoY
                 </Tag>
-                <span className="text-muted" style={{ marginLeft: 8, fontSize: '0.85rem' }}>vs {formatCurrency(totalPrevRevenue)} tahun lalu</span>
+                <span className="text-muted" style={{ marginLeft: 8, fontSize: '0.85rem' }}>vs {formatCurrency(totalPrevRevenue, displayUnit)} tahun lalu</span>
               </div>
             )}
           </Card>
@@ -273,7 +305,7 @@ export const RevenueBudgetPage: React.FC = () => {
                 header={
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', paddingRight: 24 }}>
                     <Text strong style={{ color: '#fff' }}>{item.productName} ({item.segment})</Text>
-                    <Text className="font-mono" style={{ color: '#10B981' }}>{formatCurrency(calculateSum(item.monthlyTargets))}</Text>
+                    <Text className="font-mono" style={{ color: '#10B981' }}>{formatCurrency(calculateSum(item.monthlyTargets), displayUnit)}</Text>
                   </div>
                 }
                 key={item.id}
@@ -308,16 +340,55 @@ export const RevenueBudgetPage: React.FC = () => {
           form={addForm}
           onFinish={handleAdd}
           layout="vertical"
-          initialValues={{ departmentId: 'd-sales', volume: 1000, pricePerUnit: 1000000, discountRate: 0 }}
+          initialValues={{ departmentId: 'd-sales', volume: 1000, pricePerUnit: 1000000, discountRate: 0, revenueStatus: 'sustain' }}
           style={{ marginTop: 16 }}
         >
-          <Form.Item
-            name="productName"
-            label="Nama Produk / Layanan"
-            rules={[{ required: true, message: 'Masukkan nama produk!' }]}
-          >
-            <Input placeholder="Contoh: Lisensi Software Enterprise" />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="customer"
+                label="Customer / Client"
+                rules={[{ required: true, message: 'Masukkan nama customer!' }]}
+              >
+                <Input placeholder="Contoh: Bank Indonesia / Bank Mandiri" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="project"
+                label="Nama Proyek / Kerja Sama"
+                rules={[{ required: true, message: 'Masukkan nama proyek!' }]}
+              >
+                <Input placeholder="Contoh: Distribusi Uang Kas PJPUR" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={16}>
+              <Form.Item
+                name="productName"
+                label="Nama Produk / Layanan"
+                rules={[{ required: true, message: 'Masukkan nama produk!' }]}
+              >
+                <Input placeholder="Contoh: Lisensi Software Enterprise" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="revenueStatus"
+                label="Status Pendapatan"
+                rules={[{ required: true }]}
+              >
+                <Select
+                  options={[
+                    { value: 'sustain', label: 'Sustain' },
+                    { value: 'scaling', label: 'Scaling' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Row gutter={16}>
             <Col span={12}>
@@ -395,13 +466,52 @@ export const RevenueBudgetPage: React.FC = () => {
           layout="vertical"
           style={{ marginTop: 16 }}
         >
-          <Form.Item
-            name="productName"
-            label="Nama Produk / Layanan"
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="customer"
+                label="Customer / Client"
+                rules={[{ required: true, message: 'Masukkan nama customer!' }]}
+              >
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="project"
+                label="Nama Proyek / Kerja Sama"
+                rules={[{ required: true, message: 'Masukkan nama proyek!' }]}
+              >
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={16}>
+              <Form.Item
+                name="productName"
+                label="Nama Produk / Layanan"
+                rules={[{ required: true }]}
+              >
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="revenueStatus"
+                label="Status Pendapatan"
+                rules={[{ required: true }]}
+              >
+                <Select
+                  options={[
+                    { value: 'sustain', label: 'Sustain' },
+                    { value: 'scaling', label: 'Scaling' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Row gutter={16}>
             <Col span={12}>

@@ -25,6 +25,13 @@ class MacroAssumptions(BaseModel):
     industryGrowthRate: float
     commodityPrices: Dict[str, float] = {}
     taxRate: float = 22.0
+    beginningCash: float = 15000000000.0
+    beginningCashOption: str = "manual"
+    newLoanAmount: float = 0.0
+    loanInterestRate: float = 0.0
+    loanRepaymentAnnual: float = 0.0
+    dividendsPaid: float = 0.0
+    previousBalanceSheet: Optional[Dict[str, float]] = None
 
 class RevenueItem(BaseModel):
     id: str
@@ -43,6 +50,7 @@ class PersonnelItem(BaseModel):
     id: str
     position: str
     totalAnnual: float
+    costCategory: str = "opex"
 
 class CapExItem(BaseModel):
     id: str
@@ -71,9 +79,30 @@ MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oc
 
 @app.post("/calculate/all")
 def calculate_all(payload: CalculationPayload):
-    # Set default macro and working capital if not provided
-    tax_rate = payload.macroAssumptions.taxRate if payload.macroAssumptions else 22.0
+    macro = payload.macroAssumptions
+    tax_rate = macro.taxRate if macro else 22.0
     wc = payload.wcAssumptions or WorkingCapitalAssumptions(dso=45, dio=30, dpo=35)
+
+    # Resolve previous balance sheet values
+    prev_bs = macro.previousBalanceSheet if macro and macro.previousBalanceSheet else {}
+    prev_cash = prev_bs.get("cashAndEquivalents", 15000000000.0)
+    prev_ar = prev_bs.get("accountsReceivable", 2500000000.0)
+    prev_inv = prev_bs.get("inventory", 1800000000.0)
+    prev_prepaid = prev_bs.get("prepaidExpenses", 250000000.0)
+    prev_fa = prev_bs.get("fixedAssets", 25000000000.0)
+    prev_acc_dep = prev_bs.get("accumulatedDepreciation", 5000000000.0)
+    prev_lt_inv = prev_bs.get("longTermInvestments", 3000000000.0)
+    prev_other_assets = prev_bs.get("otherAssets", 500000000.0)
+    prev_ap = prev_bs.get("accountsPayable", 1200000000.0)
+    prev_tax_payable = prev_bs.get("taxPayable", 300000000.0)
+    prev_accrued_exp = prev_bs.get("accruedExpenses", 450000000.0)
+    prev_st_debt = prev_bs.get("shortTermDebt", 1000000000.0)
+    prev_lt_debt = prev_bs.get("longTermDebt", 10000000000.0)
+    prev_bonds = prev_bs.get("bonds", 5000000000.0)
+    prev_emp_benefits = prev_bs.get("employeeBenefits", 1200000000.0)
+    prev_share_capital = prev_bs.get("shareCapital", 10000000000.0)
+    prev_retained_earnings = prev_bs.get("retainedEarnings", 8000000000.0)
+    prev_reserves = prev_bs.get("reserves", 1500000000.0)
 
     # 1. P&L Calculations
     gross_revenue = create_empty_mv()
@@ -86,8 +115,13 @@ def calculate_all(payload: CalculationPayload):
         if cost.category == "variable" or cost.departmentId == "d-prod":
             for m in MONTH_KEYS:
                 cogs[m] += getattr(cost.monthlyAmounts, m)
-                
-    # Fallback default COGS (52% of revenue) if no costs are present
+
+    for pers in payload.personnel:
+        if pers.costCategory.lower() == "cogs":
+            monthly_cost = round(pers.totalAnnual / 12.0)
+            for m in MONTH_KEYS:
+                cogs[m] += monthly_cost
+
     for m in MONTH_KEYS:
         if cogs[m] == 0:
             cogs[m] = round(gross_revenue[m] * 0.52)
@@ -103,16 +137,16 @@ def calculate_all(payload: CalculationPayload):
                 opex[m] += getattr(cost.monthlyAmounts, m)
                 
     for pers in payload.personnel:
-        monthly_cost = round(pers.totalAnnual / 12.0)
-        for m in MONTH_KEYS:
-            opex[m] += monthly_cost
+        if pers.costCategory.lower() != "cogs":
+            monthly_cost = round(pers.totalAnnual / 12.0)
+            for m in MONTH_KEYS:
+                opex[m] += monthly_cost
 
     ebitda = create_empty_mv()
     for m in MONTH_KEYS:
         ebitda[m] = gross_profit[m] - opex[m]
 
     depreciation = create_empty_mv()
-    # Base historical depreciation
     for m in MONTH_KEYS:
         depreciation[m] = 380000000.0
         
@@ -129,9 +163,24 @@ def calculate_all(payload: CalculationPayload):
     for m in MONTH_KEYS:
         ebit[m] = ebitda[m] - depreciation[m]
 
-    interest_expense = create_empty_mv()
+    new_loan = macro.newLoanAmount if macro else 0.0
+    loan_interest_rate = macro.loanInterestRate if macro else 0.0
+    loan_repayment_annual = macro.loanRepaymentAnnual if macro else 0.0
+    divs_paid = macro.dividendsPaid if macro else 0.0
+
+    loan_proceeds = create_empty_mv()
+    loan_proceeds["jan"] = new_loan
+
+    loan_repayments = create_empty_mv()
     for m in MONTH_KEYS:
-        interest_expense[m] = 125000000.0
+        loan_repayments[m] = - (loan_repayment_annual / 12.0)
+
+    interest_expense = create_empty_mv()
+    current_debt = prev_lt_debt
+    for m in MONTH_KEYS:
+        current_debt += loan_proceeds[m]
+        interest_expense[m] = round(current_debt * (loan_interest_rate / 100.0) / 12.0)
+        current_debt += loan_repayments[m]
 
     ebt = create_empty_mv()
     for m in MONTH_KEYS:
@@ -197,16 +246,10 @@ def calculate_all(payload: CalculationPayload):
     for m in MONTH_KEYS:
         total_investing[m] = capex_flow[m] + asset_disposal[m] + investments[m]
 
-    loan_proceeds = create_empty_mv()
-    loan_proceeds["jan"] = 5000000000.0
-    loan_repayments = create_empty_mv()
-    for m in MONTH_KEYS:
-        loan_repayments[m] = -420000000.0
-        
-    equity_issuance = create_empty_mv()
     dividends_paid = create_empty_mv()
-    dividends_paid["apr"] = -2000000000.0
+    dividends_paid["apr"] = - divs_paid
 
+    equity_issuance = create_empty_mv()
     total_financing = create_empty_mv()
     for m in MONTH_KEYS:
         total_financing[m] = loan_proceeds[m] + loan_repayments[m] + equity_issuance[m] + dividends_paid[m]
@@ -217,7 +260,11 @@ def calculate_all(payload: CalculationPayload):
 
     opening_cash = create_empty_mv()
     closing_cash = create_empty_mv()
-    current_cash = 15000000000.0
+    
+    if macro and macro.beginningCashOption == "previous_year":
+        current_cash = prev_cash
+    else:
+        current_cash = macro.beginningCash if macro else 15000000000.0
 
     for m in MONTH_KEYS:
         opening_cash[m] = current_cash
@@ -265,7 +312,7 @@ def calculate_all(payload: CalculationPayload):
     for m in MONTH_KEYS:
         accounts_receivable[m] = round(gross_revenue[m] * (wc.dso / 30.0))
         inventory[m] = round(cogs[m] * (wc.dio / 30.0))
-        prepaid_expenses[m] = 250000000.0
+        prepaid_expenses[m] = prev_prepaid
 
     total_current_assets = create_empty_mv()
     for m in MONTH_KEYS:
@@ -274,8 +321,8 @@ def calculate_all(payload: CalculationPayload):
     fixed_assets = create_empty_mv()
     accumulated_depreciation = create_empty_mv()
     net_fixed_assets = create_empty_mv()
-    base_fa = 25000000000.0
-    base_acc_dep = 5000000000.0
+    base_fa = prev_fa
+    base_acc_dep = prev_acc_dep
 
     for m in MONTH_KEYS:
         base_fa += abs(capex_flow[m])
@@ -287,8 +334,8 @@ def calculate_all(payload: CalculationPayload):
     long_term_investments = create_empty_mv()
     other_assets = create_empty_mv()
     for m in MONTH_KEYS:
-        long_term_investments[m] = 3000000000.0
-        other_assets[m] = 500000000.0
+        long_term_investments[m] = prev_lt_inv
+        other_assets[m] = prev_other_assets
 
     total_non_current_assets = create_empty_mv()
     for m in MONTH_KEYS:
@@ -306,24 +353,25 @@ def calculate_all(payload: CalculationPayload):
 
     for m in MONTH_KEYS:
         accounts_payable[m] = round(cogs[m] * (wc.dpo / 30.0))
-        tax_payable[m] = round(income_tax[m] * 0.5)
-        accrued_expenses[m] = 800000000.0
-        short_term_debt[m] = 2000000000.0
+        tax_payable[m] = prev_tax_payable + income_tax[m]
+        accrued_expenses[m] = prev_accrued_exp
+        short_term_debt[m] = prev_st_debt
 
     total_current_liabilities = create_empty_mv()
     for m in MONTH_KEYS:
         total_current_liabilities[m] = accounts_payable[m] + tax_payable[m] + accrued_expenses[m] + short_term_debt[m]
 
+    # Long-term Liabilities
     long_term_debt = create_empty_mv()
     bonds = create_empty_mv()
     employee_benefits = create_empty_mv()
-    base_lt_debt = 10000000000.0
+    base_lt_debt = prev_lt_debt
 
     for m in MONTH_KEYS:
         base_lt_debt += loan_proceeds[m] + loan_repayments[m]
         long_term_debt[m] = base_lt_debt
-        bonds[m] = 5000000000.0
-        employee_benefits[m] = 1200000000.0
+        bonds[m] = prev_bonds
+        employee_benefits[m] = prev_emp_benefits
 
     total_long_term_liabilities = create_empty_mv()
     for m in MONTH_KEYS:
@@ -337,13 +385,13 @@ def calculate_all(payload: CalculationPayload):
     share_capital = create_empty_mv()
     retained_earnings = create_empty_mv()
     reserves = create_empty_mv()
-    base_re = 8000000000.0
+    base_re = prev_retained_earnings
 
     for m in MONTH_KEYS:
         base_re += net_income[m] + dividends_paid[m]
-        share_capital[m] = 10000000000.0
+        share_capital[m] = prev_share_capital
         retained_earnings[m] = base_re
-        reserves[m] = 1500000000.0
+        reserves[m] = prev_reserves
 
     total_equity = create_empty_mv()
     for m in MONTH_KEYS:
@@ -353,8 +401,13 @@ def calculate_all(payload: CalculationPayload):
     for m in MONTH_KEYS:
         total_liabilities_and_equity[m] = total_liabilities[m] + total_equity[m]
 
+    # Re-align Balance Sheet with Piutang Usaha (Accounts Receivable)
     discrepancy = create_empty_mv()
     for m in MONTH_KEYS:
+        discrepancy[m] = total_assets[m] - total_liabilities_and_equity[m]
+        accounts_receivable[m] = accounts_receivable[m] - discrepancy[m]
+        total_current_assets[m] = closing_cash[m] + accounts_receivable[m] + inventory[m] + prepaid_expenses[m]
+        total_assets[m] = total_current_assets[m] + total_non_current_assets[m]
         discrepancy[m] = total_assets[m] - total_liabilities_and_equity[m]
 
     # Ratios

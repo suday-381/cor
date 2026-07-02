@@ -1,19 +1,58 @@
-import React, { useEffect } from 'react';
-import { Typography, Row, Col, Card, Statistic, Alert, Tag, Tooltip } from 'antd';
-import { CheckCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Typography, Row, Col, Card, Statistic, Alert, Tag, Tooltip, Button, Form, InputNumber, Divider, Modal } from 'antd';
+import { CheckCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined, SettingOutlined } from '@ant-design/icons';
 import { useAppStore } from '@/stores/appStore';
 import { FinancialTable, FinancialRow } from '@/components/common/FinancialTable';
 
 const { Title, Text, Paragraph } = Typography;
 
 export const BalanceSheetPage: React.FC = () => {
-  const { selectedCycleId, balanceSheetSnapshot, recalculateAll, cycles } = useAppStore();
+  const { selectedCycleId, balanceSheetSnapshot, recalculateAll, cycles, updateMacroAssumptions } = useAppStore();
+  const [isPrevBsOpen, setIsPrevBsOpen] = useState(false);
+  const [prevBsForm] = Form.useForm();
+
+  const defaultPrevBs = {
+    cashAndEquivalents: 5000000000,
+    accountsReceivable: 3000000000,
+    inventory: 2000000000,
+    prepaidExpenses: 500000000,
+    fixedAssets: 15000000000,
+    accumulatedDepreciation: 3000000000,
+    longTermInvestments: 1000000000,
+    otherAssets: 500000000,
+    accountsPayable: 2500000000,
+    taxPayable: 500000000,
+    accruedExpenses: 500000000,
+    shortTermDebt: 1000000000,
+    longTermDebt: 5000000000,
+    bonds: 2000000000,
+    employeeBenefits: 1000000000,
+    shareCapital: 7000000000,
+    retainedEarnings: 3500000000,
+    reserves: 1000000000,
+  };
+
+  const activeCycle = cycles.find(c => c.id === selectedCycleId);
 
   useEffect(() => {
     recalculateAll();
   }, [selectedCycleId]);
 
-  const activeCycle = cycles.find(c => c.id === selectedCycleId);
+  useEffect(() => {
+    if (activeCycle) {
+      prevBsForm.setFieldsValue(activeCycle.macroAssumptions.previousBalanceSheet || defaultPrevBs);
+    }
+  }, [activeCycle, isPrevBsOpen, prevBsForm]);
+
+  const handleApplyPrevBs = async (values: any) => {
+    if (activeCycle) {
+      await updateMacroAssumptions(activeCycle.id, {
+        previousBalanceSheet: values,
+      });
+      await recalculateAll();
+      setIsPrevBsOpen(false);
+    }
+  };
 
   const getBalanceSheetRows = (): FinancialRow[] => {
     if (!balanceSheetSnapshot) return [];
@@ -269,7 +308,14 @@ export const BalanceSheetPage: React.FC = () => {
             Tinjau proyeksi posisi keuangan (Aset, Liabilitas, Ekuitas). Formula otomatis memastikan persamaan dasar akuntansi tetap seimbang.
           </Paragraph>
         </div>
-        <div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <Button
+            type="default"
+            icon={<SettingOutlined />}
+            onClick={() => setIsPrevBsOpen(true)}
+          >
+            Neraca Tahun Sebelumnya
+          </Button>
           {isBalanced ? (
             <Tag color="success" icon={<CheckCircleOutlined />} style={{ fontSize: '1rem', padding: '6px 12px', borderRadius: 8 }}>
               Neraca Seimbang (Balanced)
@@ -365,6 +411,114 @@ export const BalanceSheetPage: React.FC = () => {
         title={`Proyeksi Neraca — RKAP ${activeCycle?.fiscalYear}`}
         rows={getBalanceSheetRows()}
       />
+
+      {/* PREVIOUS YEAR BALANCE SHEET MODAL */}
+      <Modal
+        title="Posisi Neraca Awal (Tahun Sebelumnya)"
+        open={isPrevBsOpen}
+        onCancel={() => setIsPrevBsOpen(false)}
+        onOk={() => prevBsForm.submit()}
+        okText="Simpan & Hitung Ulang"
+        cancelText="Batal"
+        width={700}
+      >
+        <Form
+          form={prevBsForm}
+          onFinish={handleApplyPrevBs}
+          layout="vertical"
+          style={{ marginTop: 16 }}
+        >
+          <Paragraph style={{ color: 'rgba(255,255,255,0.45)' }}>
+            Masukkan data neraca penutupan audit dari tahun anggaran sebelumnya. Angka-angka ini akan menjadi saldo awal aset, liabilitas, dan ekuitas di tahun berjalan.
+          </Paragraph>
+
+          <Row gutter={24}>
+            {/* ASET */}
+            <Col span={12}>
+              <Divider orientation="left" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>Aset (Assets)</Divider>
+              
+              <Form.Item name="cashAndEquivalents" label="Kas & Setara Kas" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+              
+              <Form.Item name="accountsReceivable" label="Piutang Usaha" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="inventory" label="Persediaan Barang" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="prepaidExpenses" label="Beban Dibayar di Muka" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="fixedAssets" label="Aset Tetap (Peralatan/Gedung)" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="accumulatedDepreciation" label="Akumulasi Penyusutan (Positif)" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="longTermInvestments" label="Investasi Jangka Panjang" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="otherAssets" label="Aset Lain-lain" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+            </Col>
+
+            {/* LIABILITAS & EKUITAS */}
+            <Col span={12}>
+              <Divider orientation="left" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>Liabilitas (Liabilities)</Divider>
+
+              <Form.Item name="accountsPayable" label="Utang Usaha" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="taxPayable" label="Utang Pajak PPh" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="accruedExpenses" label="Biaya Masih Harus Dibayar" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="shortTermDebt" label="Utang Bank Jangka Pendek" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="longTermDebt" label="Utang Bank Jangka Panjang" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="bonds" label="Obligasi / Surat Utang" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="employeeBenefits" label="Liabilitas Imbalan Kerja" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Divider orientation="left" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>Ekuitas (Equity)</Divider>
+
+              <Form.Item name="shareCapital" label="Modal Saham Disetor" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="retainedEarnings" label="Laba Ditahan" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+
+              <Form.Item name="reserves" label="Cadangan Ekuitas" rules={[{ required: true }]}>
+                <InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
     </div>
   );
 };

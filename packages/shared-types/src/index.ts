@@ -1,6 +1,6 @@
 /* ========== User & Auth Types ========== */
 
-export type UserRole = 'super_admin' | 'cfo' | 'finance_manager' | 'dept_head' | 'staff_finance' | 'viewer';
+export type UserRole = 'super_admin' | 'cfo' | 'finance_manager' | 'dept_head' | 'staff_finance' | 'viewer' | 'csp_senior_manager' | 'gm_csp_finance';
 
 export interface User {
   id: string;
@@ -22,6 +22,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   dept_head: 'Kepala Departemen',
   staff_finance: 'Staff Finance',
   viewer: 'Viewer',
+  csp_senior_manager: 'CSP Senior Manager',
+  gm_csp_finance: 'GM CSP & Finance',
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -31,6 +33,8 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   dept_head: '#F59E0B',
   staff_finance: '#3B82F6',
   viewer: '#6B7280',
+  csp_senior_manager: '#EC4899',
+  gm_csp_finance: '#8B5CF6',
 };
 
 /* ========== RKAP Cycle Types (Modul 1) ========== */
@@ -45,6 +49,13 @@ export interface MacroAssumptions {
   industryGrowthRate: number;
   commodityPrices: Record<string, number>;
   taxRate: number;
+  beginningCash: number;
+  beginningCashOption: 'manual' | 'previous_year';
+  newLoanAmount: number;
+  loanInterestRate: number;
+  loanRepaymentAnnual: number;
+  dividendsPaid: number;
+  previousBalanceSheet?: Record<string, number>;
 }
 
 export interface CycleVersion {
@@ -137,6 +148,9 @@ export interface RevenueLineItem {
     discountRate: number;
   };
   previousYear?: MonthlyValues;
+  customer?: string;
+  project?: string;
+  revenueStatus?: 'sustain' | 'scaling';
 }
 
 /* ========== Cost Types (Modul 3) ========== */
@@ -167,6 +181,7 @@ export interface PersonnelCost {
   bpjs: number;
   bonus: number;
   totalAnnual: number;
+  costCategory: 'cogs' | 'opex';
 }
 
 /* ========== CapEx Types (Modul 4) ========== */
@@ -338,6 +353,7 @@ export interface ApprovalStage {
   comments: ApprovalComment[];
   deadline?: string;
   decidedAt?: string;
+  sortOrder: number;
 }
 
 export interface ApprovalWorkflow {
@@ -348,6 +364,7 @@ export interface ApprovalWorkflow {
   status: 'pending' | 'in_progress' | 'approved' | 'rejected';
   submittedAt?: string;
   completedAt?: string;
+  departmentId?: string;
 }
 
 /* ========== Notification Types ========== */
@@ -380,3 +397,6 @@ export interface AuditLog {
   ipAddress: string;
   createdAt: string;
 }
+
+export type DisplayUnit = 'normal' | 'ribu' | 'juta' | 'milyar';
+

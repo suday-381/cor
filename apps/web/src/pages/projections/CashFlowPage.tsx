@@ -1,14 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { Typography, Row, Col, Card, Statistic, Alert, Form, InputNumber, Button, Space, Slider, Modal, Tooltip } from 'antd';
+import { Typography, Row, Col, Card, Statistic, Alert, Form, InputNumber, Button, Space, Slider, Modal, Tooltip, Select, Divider } from 'antd';
 import { InfoCircleOutlined, ExclamationCircleOutlined, CheckCircleOutlined, SettingOutlined } from '@ant-design/icons';
 import { useAppStore } from '@/stores/appStore';
 import { FinancialTable, FinancialRow } from '@/components/common/FinancialTable';
+import { formatCurrency } from '@/utils/format';
 
 const { Title, Text, Paragraph } = Typography;
 
 export const CashFlowPage: React.FC = () => {
-  const { selectedCycleId, cashFlowSnapshot, recalculateAll, cycles, updateWcAssumptions } = useAppStore();
+  const {
+    selectedCycleId,
+    cashFlowSnapshot,
+    recalculateAll,
+    cycles,
+    updateWcAssumptions,
+    updateMacroAssumptions,
+    displayUnit,
+  } = useAppStore();
   const [isWcOpen, setIsWcOpen] = useState(false);
+  const [isFinancingOpen, setIsFinancingOpen] = useState(false);
+  const [financingForm] = Form.useForm();
+  const [begCashOption, setBegCashOption] = useState<'manual' | 'previous_year'>('manual');
 
   const [dso, setDso] = useState(45);
   const [dio, setDio] = useState(30);
@@ -31,6 +43,36 @@ export const CashFlowPage: React.FC = () => {
   const handleApplyWc = () => {
     updateWcAssumptions({ dso, dio, dpo });
     setIsWcOpen(false);
+  };
+
+  useEffect(() => {
+    if (activeCycle) {
+      const opt = activeCycle.macroAssumptions.beginningCashOption || 'manual';
+      setBegCashOption(opt);
+      financingForm.setFieldsValue({
+        beginningCashOption: opt,
+        beginningCash: activeCycle.macroAssumptions.beginningCash || 0,
+        newLoanAmount: activeCycle.macroAssumptions.newLoanAmount || 0,
+        loanInterestRate: activeCycle.macroAssumptions.loanInterestRate || 0,
+        loanRepaymentAnnual: activeCycle.macroAssumptions.loanRepaymentAnnual || 0,
+        dividendsPaid: activeCycle.macroAssumptions.dividendsPaid || 0,
+      });
+    }
+  }, [activeCycle, isFinancingOpen, financingForm]);
+
+  const handleApplyFinancing = async (values: any) => {
+    if (activeCycle) {
+      await updateMacroAssumptions(activeCycle.id, {
+        beginningCashOption: values.beginningCashOption,
+        beginningCash: values.beginningCash,
+        newLoanAmount: values.newLoanAmount,
+        loanInterestRate: values.loanInterestRate,
+        loanRepaymentAnnual: values.loanRepaymentAnnual,
+        dividendsPaid: values.dividendsPaid,
+      });
+      await recalculateAll();
+      setIsFinancingOpen(false);
+    }
   };
 
   const calculateSum = (mv: any) => {
@@ -216,10 +258,6 @@ export const CashFlowPage: React.FC = () => {
 
   const warning = checkNegativeCash();
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-  };
-
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -229,13 +267,22 @@ export const CashFlowPage: React.FC = () => {
             Pantau arus kas masuk dan keluar dari operasi, investasi, dan pendanaan. Gunakan metode tidak langsung (indirect method).
           </Paragraph>
         </div>
-        <Button
-          type="primary"
-          icon={<SettingOutlined />}
-          onClick={() => setIsWcOpen(true)}
-        >
-          Asumsi Modal Kerja
-        </Button>
+        <Space>
+          <Button
+            type="default"
+            icon={<SettingOutlined />}
+            onClick={() => setIsFinancingOpen(true)}
+          >
+            Saldo Awal & Pendanaan
+          </Button>
+          <Button
+            type="primary"
+            icon={<SettingOutlined />}
+            onClick={() => setIsWcOpen(true)}
+          >
+            Asumsi Modal Kerja
+          </Button>
+        </Space>
       </div>
 
       {/* Early Warning Banner */}
@@ -246,7 +293,7 @@ export const CashFlowPage: React.FC = () => {
           }
           description={
             <span>
-              Saldo kas akhir diproyeksikan **negatif** pada bulan **{warning.month}** sebesar <Text strong style={{ color: '#EF4444' }}>{formatCurrency(warning.value || 0)}</Text>. Harap sesuaikan DSO/DIO/DPO atau perkecil rencana CapEx/anggaran biaya.
+              Saldo kas akhir diproyeksikan **negatif** pada bulan **{warning.month}** sebesar <Text strong style={{ color: '#EF4444' }}>{formatCurrency(warning.value || 0, displayUnit)}</Text>. Harap sesuaikan DSO/DIO/DPO atau perkecil rencana CapEx/anggaran biaya.
             </span>
           }
           type="error"
@@ -274,7 +321,7 @@ export const CashFlowPage: React.FC = () => {
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem' }}>TOTAL KAS AKTIVITAS OPERASIONAL</span>}
               value={totalOperating}
-              formatter={v => <span className="font-mono text-positive" style={{ fontSize: '1.4rem', fontWeight: 700 }}>{formatCurrency(Number(v))}</span>}
+              formatter={v => <span className="font-mono text-positive" style={{ fontSize: '1.4rem', fontWeight: 700 }}>{formatCurrency(Number(v), displayUnit)}</span>}
             />
           </Card>
         </Col>
@@ -283,7 +330,7 @@ export const CashFlowPage: React.FC = () => {
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem' }}>TOTAL KAS AKTIVITAS INVESTASI</span>}
               value={totalInvesting}
-              formatter={v => <span className="font-mono text-negative" style={{ fontSize: '1.4rem', fontWeight: 700 }}>{formatCurrency(Number(v))}</span>}
+              formatter={v => <span className="font-mono text-negative" style={{ fontSize: '1.4rem', fontWeight: 700 }}>{formatCurrency(Number(v), displayUnit)}</span>}
             />
           </Card>
         </Col>
@@ -292,7 +339,7 @@ export const CashFlowPage: React.FC = () => {
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem' }}>TOTAL KAS AKTIVITAS PENDANAAN</span>}
               value={totalFinancing}
-              formatter={v => <span className="font-mono text-positive" style={{ fontSize: '1.4rem', fontWeight: 700 }}>{formatCurrency(Number(v))}</span>}
+              formatter={v => <span className="font-mono text-positive" style={{ fontSize: '1.4rem', fontWeight: 700 }}>{formatCurrency(Number(v), displayUnit)}</span>}
             />
           </Card>
         </Col>
@@ -301,7 +348,7 @@ export const CashFlowPage: React.FC = () => {
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem' }}>SALDO KAS AKHIR TAHUNAN</span>}
               value={finalCash}
-              formatter={v => <span className="font-mono" style={{ fontSize: '1.4rem', color: '#6366F1', fontWeight: 700 }}>{formatCurrency(Number(v))}</span>}
+              formatter={v => <span className="font-mono" style={{ fontSize: '1.4rem', color: '#6366F1', fontWeight: 700 }}>{formatCurrency(Number(v), displayUnit)}</span>}
             />
           </Card>
         </Col>
@@ -355,6 +402,95 @@ export const CashFlowPage: React.FC = () => {
             <Text type="secondary" style={{ fontSize: '0.75rem' }}>Mempengaruhi seberapa lama perusahaan menunda pelunasan tagihan ke vendor.</Text>
           </div>
         </div>
+      </Modal>
+
+      {/* FINANCING & BEGINNING CASH MODAL */}
+      <Modal
+        title="Asumsi Kas Awal & Rencana Pendanaan"
+        open={isFinancingOpen}
+        onCancel={() => setIsFinancingOpen(false)}
+        onOk={() => financingForm.submit()}
+        okText="Simpan & Hitung Ulang"
+        cancelText="Batal"
+        width={500}
+      >
+        <Form
+          form={financingForm}
+          onFinish={handleApplyFinancing}
+          layout="vertical"
+          style={{ marginTop: 16 }}
+        >
+          <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '12px 0' }}>Saldo Awal Kas</Divider>
+          
+          <Row gutter={16}>
+            <Col span={10}>
+              <Form.Item name="beginningCashOption" label="Opsi Saldo Awal" rules={[{ required: true }]}>
+                <Select
+                  onChange={(val) => setBegCashOption(val)}
+                  options={[
+                    { value: 'manual', label: 'Input Manual' },
+                    { value: 'previous_year', label: 'Tahun Sebelumnya' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={14}>
+              <Form.Item name="beginningCash" label="Jumlah Saldo Awal (Rp)">
+                <InputNumber
+                  disabled={begCashOption === 'previous_year'}
+                  style={{ width: '100%' }}
+                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                  parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '12px 0' }}>Rencana Pinjaman Bank Baru</Divider>
+
+          <Row gutter={16}>
+            <Col span={14}>
+              <Form.Item name="newLoanAmount" label="Penerimaan Pinjaman Bank (Rp)" rules={[{ required: true }]}>
+                <InputNumber
+                  style={{ width: '100%' }}
+                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                  parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={10}>
+              <Form.Item name="loanInterestRate" label="Suku Bunga (% / Thn)" rules={[{ required: true }]}>
+                <InputNumber min={0} max={100} step={0.1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={14}>
+              <Form.Item name="loanRepaymentAnnual" label="Pembayaran Pokok Tahunan (Rp)" rules={[{ required: true }]}>
+                <InputNumber
+                  style={{ width: '100%' }}
+                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                  parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '12px 0' }}>Pembagian Dividen</Divider>
+
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="dividendsPaid" label="Pembayaran Dividen Tahunan (Rp)" rules={[{ required: true }]}>
+                <InputNumber
+                  style={{ width: '100%' }}
+                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                  parser={v => (v ? Number(v.replace(/\./g, '')) : 0) as any}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
       </Modal>
     </div>
   );

@@ -3,7 +3,8 @@ import type {
   User, UserRole, RkapCycle, CycleStatus, PeriodType, MacroAssumptions,
   RevenueLineItem, CostLineItem, PersonnelCost, PnlSnapshot, PnlSummary,
   CashFlowProjection, BalanceSheetSnapshot, ApprovalWorkflow, Notification,
-  AuditLog, MonthlyValues, WorkingCapitalAssumptions, CapExItem, ChartOfAccount, Department
+  AuditLog, MonthlyValues, WorkingCapitalAssumptions, CapExItem, ChartOfAccount, Department,
+  DisplayUnit
 } from '@/types';
 import { api } from '@/utils/api';
 import {
@@ -71,9 +72,10 @@ interface AppState {
 
   // Workflow
   workflow: ApprovalWorkflow | null;
-  submitWorkflow: () => Promise<void>;
-  approveWorkflowStage: (comment: string) => Promise<void>;
-  rejectWorkflowStage: (comment: string) => Promise<void>;
+  submitWorkflow: (departmentId?: string) => Promise<void>;
+  approveWorkflowStage: (comment: string, departmentId?: string) => Promise<void>;
+  rejectWorkflowStage: (comment: string, departmentId?: string) => Promise<void>;
+  loadWorkflow: (cycleId: string, departmentId?: string) => Promise<void>;
 
   // Notifications
   notifications: Notification[];
@@ -87,6 +89,10 @@ interface AppState {
   // Data Loading Helpers
   loadInitialData: () => Promise<void>;
   loadCycleData: (cycleId: string) => Promise<void>;
+
+  // Currency unit settings
+  displayUnit: DisplayUnit;
+  setDisplayUnit: (unit: DisplayUnit) => void;
 }
 
 const getStoredUser = (): User | null => {
@@ -99,6 +105,10 @@ const getStoredUser = (): User | null => {
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
+  // Currency unit settings
+  displayUnit: 'normal',
+  setDisplayUnit: (unit) => set({ displayUnit: unit }),
+
   // Auth
   currentUser: getStoredUser() || mockUsers.find(u => u.role === 'finance_manager') || mockUsers[0],
   users: mockUsers,
@@ -464,11 +474,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Workflow
   workflow: mockWorkflow,
-  submitWorkflow: async () => {
+  submitWorkflow: async (departmentId) => {
     try {
       const cycleId = get().selectedCycleId;
       if (!cycleId) return;
-      const workflow = await api.post<ApprovalWorkflow>('/workflow/submit', { cycleId });
+      const deptId = departmentId || get().currentUser?.departmentId;
+      const workflow = await api.post<ApprovalWorkflow>('/workflow/submit', { cycleId, departmentId: deptId });
       set({ workflow });
       set(state => ({
         cycles: state.cycles.map(c => c.id === cycleId ? { ...c, status: 'in_review' } : c)
@@ -477,11 +488,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error(err);
     }
   },
-  approveWorkflowStage: async (comment) => {
+  approveWorkflowStage: async (comment, departmentId) => {
     try {
       const cycleId = get().selectedCycleId;
       if (!cycleId) return;
-      const workflow = await api.post<ApprovalWorkflow>('/workflow/approve', { cycleId, comment });
+      const deptId = departmentId || get().currentUser?.departmentId;
+      const workflow = await api.post<ApprovalWorkflow>('/workflow/approve', { cycleId, departmentId: deptId, comment });
       set({ workflow });
       
       const newStatus = workflow.status === 'approved' ? 'approved' : 'in_review';
@@ -492,15 +504,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error(err);
     }
   },
-  rejectWorkflowStage: async (comment) => {
+  rejectWorkflowStage: async (comment, departmentId) => {
     try {
       const cycleId = get().selectedCycleId;
       if (!cycleId) return;
-      const workflow = await api.post<ApprovalWorkflow>('/workflow/reject', { cycleId, comment });
+      const deptId = departmentId || get().currentUser?.departmentId;
+      const workflow = await api.post<ApprovalWorkflow>('/workflow/reject', { cycleId, departmentId: deptId, comment });
       set({ workflow });
       set(state => ({
         cycles: state.cycles.map(c => c.id === cycleId ? { ...c, status: 'draft' } : c)
       }));
+    } catch (err) {
+      console.error(err);
+    }
+  },
+  loadWorkflow: async (cycleId, departmentId) => {
+    try {
+      const workflow = await api.get<ApprovalWorkflow>('/workflow', { cycleId, departmentId });
+      set({ workflow });
     } catch (err) {
       console.error(err);
     }
@@ -572,18 +593,29 @@ export const useAppStore = create<AppState>((set, get) => ({
         auditLogs: logs,
         notifications: notifs
       });
+
+      // Auto-select a valid cycle from the database if the current one is not in the list
+      const currentSelected = get().selectedCycleId;
+      if (cycles.length > 0) {
+        const exists = cycles.some(c => c.id === currentSelected);
+        if (!exists) {
+          const preferredCycle = cycles.find(c => c.fiscalYear === 2027) || cycles[0];
+          set({ selectedCycleId: preferredCycle.id });
+        }
+      }
     } catch (err) {
       console.error('Failed to load initial data:', err);
     }
   },
   loadCycleData: async (cycleId) => {
     try {
+      const departmentId = get().currentUser?.departmentId;
       const [revs, costs, personnel, capex, workflow] = await Promise.all([
         api.get<RevenueLineItem[]>('/revenue', { cycleId }),
         api.get<CostLineItem[]>('/cost/line-items', { cycleId }),
         api.get<PersonnelCost[]>('/cost/personnel', { cycleId }),
         api.get<CapExItem[]>('/capex', { cycleId }),
-        api.get<ApprovalWorkflow>('/workflow', { cycleId })
+        api.get<ApprovalWorkflow>('/workflow', { cycleId, departmentId })
       ]);
 
       let pnl = null;

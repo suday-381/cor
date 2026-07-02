@@ -37,6 +37,8 @@ export const Header: React.FC<HeaderProps> = ({ collapsed, setCollapsed }) => {
     notifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,
+    displayUnit,
+    setDisplayUnit,
   } = useAppStore();
 
   const activeCycle = cycles.find(c => c.id === selectedCycleId);
@@ -188,6 +190,22 @@ export const Header: React.FC<HeaderProps> = ({ collapsed, setCollapsed }) => {
             }))}
           />
           {activeCycle && getStatusTag(activeCycle.status)}
+        </Space>
+
+        <Space align="center" style={{ marginLeft: 16 }}>
+          <Text style={{ color: '#9CA3AF', fontSize: '0.9rem' }}>Satuan:</Text>
+          <Select
+            value={displayUnit}
+            onChange={(val) => setDisplayUnit(val as any)}
+            style={{ width: 110 }}
+            dropdownStyle={{ backgroundColor: '#111827' }}
+            options={[
+              { value: 'normal', label: 'Normal' },
+              { value: 'ribu', label: 'Ribu (Rp)' },
+              { value: 'juta', label: 'Juta (Rp)' },
+              { value: 'milyar', label: 'Milyar (Rp)' },
+            ]}
+          />
         </Space>
       </div>
 

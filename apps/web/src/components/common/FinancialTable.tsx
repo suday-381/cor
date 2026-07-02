@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Radio, Space, Typography, Tooltip, Table, Input } from 'antd';
 import { InfoCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import { MonthlyValues, MONTH_KEYS, MONTH_LABELS } from '@/types';
+import { useAppStore } from '@/stores/appStore';
 
 const { Text } = Typography;
 
@@ -27,15 +28,26 @@ type ViewMode = 'monthly' | 'quarterly' | 'annual';
 export const FinancialTable: React.FC<FinancialTableProps> = ({ title, rows, loading = false }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('monthly');
   const [searchText, setSearchText] = useState<string>('');
+  const displayUnit = useAppStore(state => state.displayUnit);
 
   const formatCurrency = (val: number) => {
     if (val === 0) return '-';
+    let divisor = 1;
+    let unitLabel = '';
+    switch (displayUnit) {
+      case 'ribu': divisor = 1000; unitLabel = ' Rb'; break;
+      case 'juta': divisor = 1000000; unitLabel = ' Jt'; break;
+      case 'milyar': divisor = 1000000000; unitLabel = ' M'; break;
+    }
+    const dividedValue = val / divisor;
     const formatted = new Intl.NumberFormat('id-ID', {
       style: 'decimal',
-      maximumFractionDigits: 0
-    }).format(Math.abs(val));
+      minimumFractionDigits: displayUnit === 'normal' ? 0 : 2,
+      maximumFractionDigits: displayUnit === 'normal' ? 0 : 2
+    }).format(Math.abs(dividedValue));
 
-    return val < 0 ? `(${formatted})` : formatted;
+    const withSign = val < 0 ? `(${formatted})` : formatted;
+    return withSign + unitLabel;
   };
 
   // Aggregation helpers

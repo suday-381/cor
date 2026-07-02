@@ -147,6 +147,12 @@ export const CycleListPage: React.FC = () => {
       industryGrowthRate: values.industryGrowthRate,
       commodityPrices: { CPO: 12000, Rubber: 8000 },
       taxRate: values.taxRate,
+      beginningCash: 5000000000,
+      beginningCashOption: 'manual',
+      newLoanAmount: 0,
+      loanInterestRate: 10,
+      loanRepaymentAnnual: 0,
+      dividendsPaid: 0,
     };
     addCycle(values.fiscalYear, values.periodType, macro);
     setIsCreateModalOpen(false);

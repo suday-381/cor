@@ -89,6 +89,8 @@ export const LoginPage: React.FC = () => {
                 { value: 'finance_manager', label: 'Finance Manager' },
                 { value: 'dept_head', label: 'Kepala Departemen (Ops/Sales)' },
                 { value: 'staff_finance', label: 'Staff Keuangan' },
+                { value: 'csp_senior_manager', label: 'CSP Senior Manager (Business Dept)' },
+                { value: 'gm_csp_finance', label: 'GM CSP & Finance (Business Dept)' },
                 { value: 'viewer', label: 'Viewer (Direksi Non-Fin)' },
               ]}
             />
@@ -150,6 +152,26 @@ export const LoginPage: React.FC = () => {
                 onClick={() => handleQuickLogin('admin@corplan.id', 'super_admin')}
               >
                 4. Super Admin
+              </Button>
+            </Col>
+            <Col span={12}>
+              <Button
+                size="small"
+                type="dashed"
+                style={{ width: '100%', fontSize: '0.75rem', borderColor: '#EC4899', color: '#EC4899' }}
+                onClick={() => handleQuickLogin('csp@corplan.id', 'csp_senior_manager')}
+              >
+                5. CSP Sr Mgr
+              </Button>
+            </Col>
+            <Col span={12}>
+              <Button
+                size="small"
+                type="dashed"
+                style={{ width: '100%', fontSize: '0.75rem', borderColor: '#8B5CF6', color: '#8B5CF6' }}
+                onClick={() => handleQuickLogin('gm@corplan.id', 'gm_csp_finance')}
+              >
+                6. GM CSP & Fin
               </Button>
             </Col>
           </Row>

@@ -144,7 +144,7 @@ export class ProjectionsService {
       pnl.cycleId = cycleId;
       pnl.version = versionNum;
     }
-    pnl.summary = calcResult.pnl.summary;
+    pnl.summary = calcResult.pnl.summary || calcResult.pnl;
     pnl.byDepartment = calcResult.pnl.byDepartment || {};
     pnl.calculatedAt = new Date().toISOString();
     const savedPnl = await this.pnlRepository.save(pnl);
@@ -201,14 +201,34 @@ export class ProjectionsService {
 
     const monthKeys: (keyof MonthlyValues)[] = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
-    const macro = payload.macroAssumptions || { taxRate: 22.0 };
+    const macro = payload.macroAssumptions || {};
     const revs = payload.revenues || [];
     const costs = payload.costs || [];
     const personnel = payload.personnel || [];
     const capex = payload.capex || [];
     const wc = payload.wcAssumptions || { dso: 45, dio: 30, dpo: 35 };
 
-    // P&L calculation
+    const prevBs = macro.previousBalanceSheet || {};
+    const prevCash = Number(prevBs.cashAndEquivalents !== undefined ? prevBs.cashAndEquivalents : 15000000000);
+    const prevAr = Number(prevBs.accountsReceivable !== undefined ? prevBs.accountsReceivable : 2500000000);
+    const prevInv = Number(prevBs.inventory !== undefined ? prevBs.inventory : 1800000000);
+    const prevPrepaid = Number(prevBs.prepaidExpenses !== undefined ? prevBs.prepaidExpenses : 250000000);
+    const prevFa = Number(prevBs.fixedAssets !== undefined ? prevBs.fixedAssets : 25000000000);
+    const prevAccDep = Number(prevBs.accumulatedDepreciation !== undefined ? prevBs.accumulatedDepreciation : 5000000000);
+    const prevLtInv = Number(prevBs.longTermInvestments !== undefined ? prevBs.longTermInvestments : 3000000000);
+    const prevOtherAssets = Number(prevBs.otherAssets !== undefined ? prevBs.otherAssets : 500000000);
+    const prevAp = Number(prevBs.accountsPayable !== undefined ? prevBs.accountsPayable : 1200000000);
+    const prevTaxPayable = Number(prevBs.taxPayable !== undefined ? prevBs.taxPayable : 300000000);
+    const prevAccruedExp = Number(prevBs.accruedExpenses !== undefined ? prevBs.accruedExpenses : 450000000);
+    const prevStDebt = Number(prevBs.shortTermDebt !== undefined ? prevBs.shortTermDebt : 1000000000);
+    const prevLtDebt = Number(prevBs.longTermDebt !== undefined ? prevBs.longTermDebt : 10000000000);
+    const prevBonds = Number(prevBs.bonds !== undefined ? prevBs.bonds : 5000000000);
+    const prevEmpBenefits = Number(prevBs.employeeBenefits !== undefined ? prevBs.employeeBenefits : 1200000000);
+    const prevShareCapital = Number(prevBs.shareCapital !== undefined ? prevBs.shareCapital : 10000000000);
+    const prevRetainedEarnings = Number(prevBs.retainedEarnings !== undefined ? prevBs.retainedEarnings : 8000000000);
+    const prevReserves = Number(prevBs.reserves !== undefined ? prevBs.reserves : 1500000000);
+
+    // 1. P&L
     const grossRevenue = createEmptyMv();
     revs.forEach((r: any) => {
       monthKeys.forEach(m => {
@@ -222,8 +242,13 @@ export class ProjectionsService {
         cogs[m] += Number(c.monthlyAmounts?.[m] || 0);
       });
     });
-    monthKeys.forEach(m => {
-      if (cogs[m] === 0) cogs[m] = Math.round(grossRevenue[m] * 0.52);
+
+    // COGS Personnel
+    personnel.filter((p: any) => p.costCategory?.toLowerCase() === 'cogs').forEach((p: any) => {
+      const monthlyP = Math.round(Number(p.totalAnnual || 0) / 12);
+      monthKeys.forEach(m => {
+        cogs[m] += monthlyP;
+      });
     });
 
     const grossProfit = createEmptyMv();
@@ -237,7 +262,9 @@ export class ProjectionsService {
         opex[m] += Number(c.monthlyAmounts?.[m] || 0);
       });
     });
-    personnel.forEach((p: any) => {
+
+    // OPEX Personnel
+    personnel.filter((p: any) => p.costCategory?.toLowerCase() !== 'cogs').forEach((p: any) => {
       const monthlyP = Math.round(Number(p.totalAnnual || 0) / 12);
       monthKeys.forEach(m => {
         opex[m] += monthlyP;
@@ -250,9 +277,6 @@ export class ProjectionsService {
     });
 
     const depreciation = createEmptyMv();
-    monthKeys.forEach(m => {
-      depreciation[m] = 380000000;
-    });
     capex.forEach((item: any) => {
       const monthlyDep = Math.round(Number(item.totalCost || 0) / (Number(item.usefulLife || 5) * 12));
       const startIdx = monthKeys.indexOf(item.procurementMonth || 'jan');
@@ -268,9 +292,27 @@ export class ProjectionsService {
       ebit[m] = ebitda[m] - depreciation[m];
     });
 
-    const interestExpense = createEmptyMv();
+    // Financing activities inputs
+    const newLoan = Number(macro.newLoanAmount || 0);
+    const loanInterestRate = Number(macro.loanInterestRate || 0);
+    const loanRepaymentAnnual = Number(macro.loanRepaymentAnnual || 0);
+    const divsPaid = Number(macro.dividendsPaid || 0);
+
+    const loanProceeds = createEmptyMv();
+    loanProceeds.jan = newLoan;
+
+    const loanRepayments = createEmptyMv();
     monthKeys.forEach(m => {
-      interestExpense[m] = 125000000;
+      loanRepayments[m] = -Math.round(loanRepaymentAnnual / 12);
+    });
+
+    // Dynamic interest expense based on outstanding debt
+    const interestExpense = createEmptyMv();
+    let currentDebt = prevLtDebt;
+    monthKeys.forEach(m => {
+      currentDebt += loanProceeds[m];
+      interestExpense[m] = Math.round(currentDebt * (loanInterestRate / 100) / 12);
+      currentDebt += loanRepayments[m];
     });
 
     const ebt = createEmptyMv();
@@ -296,7 +338,7 @@ export class ProjectionsService {
       byDepartment: {}
     };
 
-    // Cash Flow Calculation
+    // 2. Cash Flow
     const receivablesChange = createEmptyMv();
     const inventoryChange = createEmptyMv();
     const payablesChange = createEmptyMv();
@@ -311,7 +353,6 @@ export class ProjectionsService {
       payablesChange[m] = Math.round((cogs[m] - prevCogs) * (wc.dpo / 360));
     });
 
-    const depreciationAdj = depreciation;
     const otherAdjustments = createEmptyMv();
     monthKeys.forEach(m => {
       otherAdjustments[m] = 50000000;
@@ -319,7 +360,7 @@ export class ProjectionsService {
 
     const totalOperating = createEmptyMv();
     monthKeys.forEach(m => {
-      totalOperating[m] = netIncome[m] + depreciationAdj[m] + receivablesChange[m] + inventoryChange[m] + payablesChange[m] + otherAdjustments[m];
+      totalOperating[m] = netIncome[m] + depreciation[m] + receivablesChange[m] + inventoryChange[m] + payablesChange[m] + otherAdjustments[m];
     });
 
     const capexFlow = createEmptyMv();
@@ -329,25 +370,16 @@ export class ProjectionsService {
     });
 
     const assetDisposal = createEmptyMv();
-    assetDisposal.mar = 50000000;
-    assetDisposal.aug = 100000000;
-
     const investments = createEmptyMv();
     const totalInvesting = createEmptyMv();
     monthKeys.forEach(m => {
       totalInvesting[m] = capexFlow[m] + assetDisposal[m] + investments[m];
     });
 
-    const loanProceeds = createEmptyMv();
-    loanProceeds.jan = 5000000000;
-    const loanRepayments = createEmptyMv();
-    monthKeys.forEach(m => {
-      loanRepayments[m] = -420000000;
-    });
-    const equityIssuance = createEmptyMv();
     const dividendsPaid = createEmptyMv();
-    dividendsPaid.apr = -2000000000;
+    dividendsPaid.apr = -divsPaid;
 
+    const equityIssuance = createEmptyMv();
     const totalFinancing = createEmptyMv();
     monthKeys.forEach(m => {
       totalFinancing[m] = loanProceeds[m] + loanRepayments[m] + equityIssuance[m] + dividendsPaid[m];
@@ -360,7 +392,7 @@ export class ProjectionsService {
 
     const openingCash = createEmptyMv();
     const closingCash = createEmptyMv();
-    let currentCash = 15000000000;
+    let currentCash = macro.beginningCashOption === 'previous_year' ? prevCash : Number(macro.beginningCash || 15000000000);
 
     monthKeys.forEach(m => {
       openingCash[m] = currentCash;
@@ -370,26 +402,42 @@ export class ProjectionsService {
 
     const cashflow = {
       operatingActivities: {
-        netIncome, depreciationAdj, receivablesChange, inventoryChange, payablesChange, otherAdjustments, totalOperating
+        netIncome,
+        depreciationAdj: depreciation,
+        receivablesChange,
+        inventoryChange,
+        payablesChange,
+        otherAdjustments,
+        totalOperating
       },
       investingActivities: {
-        capex: capexFlow, assetDisposal, investments, totalInvesting
+        capex: capexFlow,
+        assetDisposal,
+        investments,
+        totalInvesting
       },
       financingActivities: {
-        loanProceeds, loanRepayments, equityIssuance, dividendsPaid, totalFinancing
+        loanProceeds,
+        loanRepayments,
+        equityIssuance,
+        dividendsPaid,
+        totalFinancing
       },
-      netCashFlow, openingCash, closingCash,
-      wcAssumptions: wc,
+      netCashFlow,
+      openingCash,
+      closingCash,
+      wcAssumptions: wc
     };
 
-    // Balance Sheet calculation
+    // 3. Balance Sheet
     const accountsReceivable = createEmptyMv();
     const inventory = createEmptyMv();
     const prepaidExpenses = createEmptyMv();
+
     monthKeys.forEach(m => {
       accountsReceivable[m] = Math.round(grossRevenue[m] * (wc.dso / 30));
       inventory[m] = Math.round(cogs[m] * (wc.dio / 30));
-      prepaidExpenses[m] = 250000000;
+      prepaidExpenses[m] = prevPrepaid;
     });
 
     const totalCurrentAssets = createEmptyMv();
@@ -400,8 +448,8 @@ export class ProjectionsService {
     const fixedAssets = createEmptyMv();
     const accumulatedDepreciation = createEmptyMv();
     const netFixedAssets = createEmptyMv();
-    let baseFa = 25000000000;
-    let baseAccDep = 5000000000;
+    let baseFa = prevFa;
+    let baseAccDep = prevAccDep;
 
     monthKeys.forEach(m => {
       baseFa += Math.abs(capexFlow[m]);
@@ -414,8 +462,8 @@ export class ProjectionsService {
     const longTermInvestments = createEmptyMv();
     const otherAssets = createEmptyMv();
     monthKeys.forEach(m => {
-      longTermInvestments[m] = 3000000000;
-      otherAssets[m] = 500000000;
+      longTermInvestments[m] = prevLtInv;
+      otherAssets[m] = prevOtherAssets;
     });
 
     const totalNonCurrentAssets = createEmptyMv();
@@ -428,6 +476,7 @@ export class ProjectionsService {
       totalAssets[m] = totalCurrentAssets[m] + totalNonCurrentAssets[m];
     });
 
+    // Liabilities
     const accountsPayable = createEmptyMv();
     const taxPayable = createEmptyMv();
     const accruedExpenses = createEmptyMv();
@@ -435,9 +484,9 @@ export class ProjectionsService {
 
     monthKeys.forEach(m => {
       accountsPayable[m] = Math.round(cogs[m] * (wc.dpo / 30));
-      taxPayable[m] = Math.round(incomeTax[m] * 0.5);
-      accruedExpenses[m] = 800000000;
-      shortTermDebt[m] = 2000000000;
+      taxPayable[m] = prevTaxPayable + incomeTax[m];
+      accruedExpenses[m] = prevAccruedExp;
+      shortTermDebt[m] = prevStDebt;
     });
 
     const totalCurrentLiabilities = createEmptyMv();
@@ -448,13 +497,13 @@ export class ProjectionsService {
     const longTermDebt = createEmptyMv();
     const bonds = createEmptyMv();
     const employeeBenefits = createEmptyMv();
+    let baseLtDebt = prevLtDebt;
 
-    let baseLtDebt = 10000000000;
     monthKeys.forEach(m => {
       baseLtDebt += loanProceeds[m] + loanRepayments[m];
       longTermDebt[m] = baseLtDebt;
-      bonds[m] = 5000000000;
-      employeeBenefits[m] = 1200000000;
+      bonds[m] = prevBonds;
+      employeeBenefits[m] = prevEmpBenefits;
     });
 
     const totalLongTermLiabilities = createEmptyMv();
@@ -467,16 +516,17 @@ export class ProjectionsService {
       totalLiabilities[m] = totalCurrentLiabilities[m] + totalLongTermLiabilities[m];
     });
 
+    // Equity
     const shareCapital = createEmptyMv();
     const retainedEarnings = createEmptyMv();
     const reserves = createEmptyMv();
+    let baseRe = prevRetainedEarnings;
 
-    let baseRe = 8000000000;
     monthKeys.forEach(m => {
       baseRe += netIncome[m] + dividendsPaid[m];
-      shareCapital[m] = 10000000000;
+      shareCapital[m] = prevShareCapital;
       retainedEarnings[m] = baseRe;
-      reserves[m] = 1500000000;
+      reserves[m] = prevReserves;
     });
 
     const totalEquity = createEmptyMv();
@@ -489,8 +539,13 @@ export class ProjectionsService {
       totalLiabilitiesAndEquity[m] = totalLiabilities[m] + totalEquity[m];
     });
 
+    // BS Plug to Accounts Receivable (Piutang Usaha)
     const discrepancy = createEmptyMv();
     monthKeys.forEach(m => {
+      discrepancy[m] = totalAssets[m] - totalLiabilitiesAndEquity[m];
+      accountsReceivable[m] = accountsReceivable[m] - discrepancy[m];
+      totalCurrentAssets[m] = closingCash[m] + accountsReceivable[m] + inventory[m] + prepaidExpenses[m];
+      totalAssets[m] = totalCurrentAssets[m] + totalNonCurrentAssets[m];
       discrepancy[m] = totalAssets[m] - totalLiabilitiesAndEquity[m];
     });
 
@@ -500,10 +555,10 @@ export class ProjectionsService {
     const roa = createEmptyMv();
 
     monthKeys.forEach(m => {
-      currentRatio[m] = parseFloat((totalCurrentAssets[m] / totalCurrentLiabilities[m]).toFixed(2));
-      debtToEquity[m] = parseFloat((totalLiabilities[m] / totalEquity[m]).toFixed(2));
-      roe[m] = parseFloat(((netIncome[m] * 12) / totalEquity[m] * 100).toFixed(1));
-      roa[m] = parseFloat(((netIncome[m] * 12) / totalAssets[m] * 100).toFixed(1));
+      currentRatio[m] = parseFloat((totalCurrentAssets[m] / totalCurrentLiabilities[m]).toFixed(2)) || 0;
+      debtToEquity[m] = parseFloat((totalLiabilities[m] / totalEquity[m]).toFixed(2)) || 0;
+      roe[m] = parseFloat(((netIncome[m] * 12) / totalEquity[m] * 100).toFixed(1)) || 0;
+      roa[m] = parseFloat(((netIncome[m] * 12) / totalAssets[m] * 100).toFixed(1)) || 0;
     });
 
     const balancesheet = {

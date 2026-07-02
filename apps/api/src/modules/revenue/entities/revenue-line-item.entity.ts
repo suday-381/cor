@@ -51,4 +51,13 @@ export class RevenueLineItem {
 
   @Column({ type: 'jsonb', name: 'previous_year', nullable: true })
   previousYear?: MonthlyValues;
+
+  @Column({ nullable: true })
+  customer?: string;
+
+  @Column({ nullable: true })
+  project?: string;
+
+  @Column({ type: 'varchar', name: 'revenue_status', default: 'sustain' })
+  revenueStatus: 'sustain' | 'scaling';
 }

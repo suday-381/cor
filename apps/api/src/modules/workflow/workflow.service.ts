@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { ApprovalWorkflow } from './entities/approval-workflow.entity';
 import { ApprovalStage } from './entities/approval-stage.entity';
 import { ApprovalComment } from './entities/approval-comment.entity';
 import { RkapCycle } from '../rkap-cycle/entities/rkap-cycle.entity';
+import { Department } from '../master-data/entities/department.entity';
 import { User } from '../users/user.entity';
 
 @Injectable()
@@ -18,49 +19,115 @@ export class WorkflowService {
     private readonly commentRepository: Repository<ApprovalComment>,
     @InjectRepository(RkapCycle)
     private readonly cycleRepository: Repository<RkapCycle>,
+    @InjectRepository(Department)
+    private readonly departmentRepository: Repository<Department>,
   ) {}
 
   private isUuid(str: string): boolean {
     return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str);
   }
 
-  async getWorkflow(cycleId: string): Promise<ApprovalWorkflow> {
+  async getWorkflow(cycleId: string, departmentId?: string): Promise<ApprovalWorkflow> {
     if (!this.isUuid(cycleId)) {
       throw new NotFoundException(`Siklus RKAP dengan ID ${cycleId} tidak ditemukan`);
     }
+
+    const whereClause: any = { cycleId };
+    if (departmentId) {
+      whereClause.departmentId = departmentId;
+    } else {
+      whereClause.departmentId = IsNull();
+    }
+
     let workflow = await this.workflowRepository.findOne({
-      where: { cycleId },
+      where: whereClause,
       relations: ['stages', 'stages.comments'],
     });
 
     if (!workflow) {
+      // In order to check department code, we need to load it
+      let isBusinessDept = false;
+      if (departmentId) {
+        const dept = await this.departmentRepository.findOne({ where: { id: departmentId } });
+        if (dept && (dept.code === 'SAL' || dept.code === 'OPS' || dept.isRevenueCenter)) {
+          isBusinessDept = true;
+        }
+      }
+
       // Initialize workflow
       workflow = new ApprovalWorkflow();
       workflow.cycleId = cycleId;
+      workflow.departmentId = departmentId;
       workflow.status = 'pending';
       workflow.currentStageIndex = 0;
       const savedWf = await this.workflowRepository.save(workflow);
 
-      // Create standard stages
-      const stage0 = new ApprovalStage();
-      stage0.workflowId = savedWf.id;
-      stage0.stageName = 'Penyusunan Anggaran';
-      stage0.approverRole = 'finance_manager';
-      stage0.status = 'approved'; // Budget draft starts complete/ready
+      const stages: ApprovalStage[] = [];
 
-      const stage1 = new ApprovalStage();
-      stage1.workflowId = savedWf.id;
-      stage1.stageName = 'Review Finance Manager';
-      stage1.approverRole = 'finance_manager';
-      stage1.status = 'pending';
+      if (isBusinessDept) {
+        // Stage 0: Penyusunan Anggaran (completed by default)
+        const stage0 = new ApprovalStage();
+        stage0.workflowId = savedWf.id;
+        stage0.stageName = 'Penyusunan Anggaran';
+        stage0.approverRole = 'finance_manager';
+        stage0.status = 'approved';
+        stage0.sortOrder = 0;
+        stages.push(stage0);
 
-      const stage2 = new ApprovalStage();
-      stage2.workflowId = savedWf.id;
-      stage2.stageName = 'Persetujuan CFO';
-      stage2.approverRole = 'cfo';
-      stage2.status = 'pending';
+        // Stage 1: Review/Approval CSP Senior Manager
+        const stage1 = new ApprovalStage();
+        stage1.workflowId = savedWf.id;
+        stage1.stageName = 'Review CSP Senior Manager';
+        stage1.approverRole = 'csp_senior_manager';
+        stage1.status = 'pending';
+        stage1.sortOrder = 1;
+        stages.push(stage1);
 
-      await this.stageRepository.save([stage0, stage1, stage2]);
+        // Stage 2: Persetujuan GM CSP & Finance
+        const stage2 = new ApprovalStage();
+        stage2.workflowId = savedWf.id;
+        stage2.stageName = 'Persetujuan GM CSP & Finance';
+        stage2.approverRole = 'gm_csp_finance';
+        stage2.status = 'pending';
+        stage2.sortOrder = 2;
+        stages.push(stage2);
+
+        // Stage 3: Persetujuan CFO
+        const stage3 = new ApprovalStage();
+        stage3.workflowId = savedWf.id;
+        stage3.stageName = 'Persetujuan CFO';
+        stage3.approverRole = 'cfo';
+        stage3.status = 'pending';
+        stage3.sortOrder = 3;
+        stages.push(stage3);
+      } else {
+        // Standard stages
+        const stage0 = new ApprovalStage();
+        stage0.workflowId = savedWf.id;
+        stage0.stageName = 'Penyusunan Anggaran';
+        stage0.approverRole = 'finance_manager';
+        stage0.status = 'approved';
+        stage0.sortOrder = 0;
+        stages.push(stage0);
+
+        const stage1 = new ApprovalStage();
+        stage1.workflowId = savedWf.id;
+        stage1.stageName = 'Review Finance Manager';
+        stage1.approverRole = 'finance_manager';
+        stage1.status = 'pending';
+        stage1.sortOrder = 1;
+        stages.push(stage1);
+
+        const stage2 = new ApprovalStage();
+        stage2.workflowId = savedWf.id;
+        stage2.stageName = 'Persetujuan CFO';
+        stage2.approverRole = 'cfo';
+        stage2.status = 'pending';
+        stage2.sortOrder = 2;
+        stages.push(stage2);
+      }
+
+      await this.stageRepository.save(stages);
 
       workflow = await this.workflowRepository.findOne({
         where: { id: savedWf.id },
@@ -76,20 +143,14 @@ export class WorkflowService {
       workflow.stages = [];
     }
 
-    // Sort stages by order (since TypeORM may return them unsorted, we order them)
-    // For simplicity, Penyusunan Anggaran is first, Review Finance Manager second, CFO third
-    const orderMap: Record<string, number> = {
-      'Penyusunan Anggaran': 0,
-      'Review Finance Manager': 1,
-      'Persetujuan CFO': 2,
-    };
-    workflow.stages.sort((a, b) => (orderMap[a.stageName] ?? 0) - (orderMap[b.stageName] ?? 0));
+    // Sort stages by sortOrder
+    workflow.stages.sort((a, b) => a.sortOrder - b.sortOrder);
 
     return workflow;
   }
 
-  async submit(cycleId: string, user: User): Promise<ApprovalWorkflow> {
-    const wf = await this.getWorkflow(cycleId);
+  async submit(cycleId: string, departmentId: string | undefined, user: User): Promise<ApprovalWorkflow> {
+    const wf = await this.getWorkflow(cycleId, departmentId);
     if (!wf || !wf.stages || wf.stages.length < 2) {
       throw new BadRequestException('Workflow tidak valid atau belum diinisialisasi');
     }
@@ -101,12 +162,7 @@ export class WorkflowService {
     wf.currentStageIndex = 1;
     wf.submittedAt = new Date().toISOString();
 
-    const orderMap: Record<string, number> = {
-      'Penyusunan Anggaran': 0,
-      'Review Finance Manager': 1,
-      'Persetujuan CFO': 2,
-    };
-    wf.stages.sort((a, b) => (orderMap[a.stageName] ?? 0) - (orderMap[b.stageName] ?? 0));
+    wf.stages.sort((a, b) => a.sortOrder - b.sortOrder);
 
     wf.stages[0].status = 'approved';
     wf.stages[0].decidedAt = new Date().toISOString();
@@ -119,11 +175,11 @@ export class WorkflowService {
     // Sync cycle status
     await this.cycleRepository.update(cycleId, { status: 'in_review' });
 
-    return this.getWorkflow(cycleId);
+    return this.getWorkflow(cycleId, departmentId);
   }
 
-  async approveStage(cycleId: string, commentText: string, user: User): Promise<ApprovalWorkflow> {
-    const wf = await this.getWorkflow(cycleId);
+  async approveStage(cycleId: string, departmentId: string | undefined, commentText: string, user: User): Promise<ApprovalWorkflow> {
+    const wf = await this.getWorkflow(cycleId, departmentId);
     if (!wf || !wf.stages || wf.stages.length === 0) {
       throw new BadRequestException('Workflow tidak valid atau belum diinisialisasi');
     }
@@ -169,11 +225,11 @@ export class WorkflowService {
       await this.workflowRepository.save(wf);
     }
 
-    return this.getWorkflow(cycleId);
+    return this.getWorkflow(cycleId, departmentId);
   }
 
-  async rejectStage(cycleId: string, commentText: string, user: User): Promise<ApprovalWorkflow> {
-    const wf = await this.getWorkflow(cycleId);
+  async rejectStage(cycleId: string, departmentId: string | undefined, commentText: string, user: User): Promise<ApprovalWorkflow> {
+    const wf = await this.getWorkflow(cycleId, departmentId);
     if (!wf || !wf.stages || wf.stages.length === 0) {
       throw new BadRequestException('Workflow tidak valid atau belum diinisialisasi');
     }
@@ -213,6 +269,6 @@ export class WorkflowService {
     // Sync cycle status to draft (so it can be revised)
     await this.cycleRepository.update(cycleId, { status: 'draft' });
 
-    return this.getWorkflow(cycleId);
+    return this.getWorkflow(cycleId, departmentId);
   }
 }

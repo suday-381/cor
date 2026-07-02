@@ -85,11 +85,14 @@ export class MasterDataService implements OnModuleInit {
     const depts = await this.departmentRepository.find();
     const finDept = depts.find((d) => d.code === 'FIN');
     const dirDept = depts.find((d) => d.code === 'DIR');
+    const opsDept = depts.find((d) => d.code === 'OPS');
 
     const users = [
       { email: 'admin@corplan.id', name: 'Budi Santoso', role: 'super_admin' as const, departmentId: finDept?.id, isActive: true },
       { email: 'cfo@corplan.id', name: 'Diana Wijaya', role: 'cfo' as const, departmentId: dirDept?.id, isActive: true },
       { email: 'finance@corplan.id', name: 'Rina Hartati', role: 'finance_manager' as const, departmentId: finDept?.id, isActive: true },
+      { email: 'csp@corplan.id', name: 'Hendra Wijaya', role: 'csp_senior_manager' as const, departmentId: opsDept?.id, isActive: true },
+      { email: 'gm@corplan.id', name: 'Bambang Pratama', role: 'gm_csp_finance' as const, departmentId: finDept?.id, isActive: true },
     ];
 
     const passwordHash = await bcrypt.hash('password123', 10);

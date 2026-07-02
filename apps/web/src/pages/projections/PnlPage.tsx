@@ -3,11 +3,12 @@ import { Typography, Row, Col, Card, Statistic, Alert, Tooltip } from 'antd';
 import { PercentageOutlined, ArrowUpOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import { useAppStore } from '@/stores/appStore';
 import { FinancialTable, FinancialRow } from '@/components/common/FinancialTable';
+import { formatCurrency } from '@/utils/format';
 
 const { Title, Text, Paragraph } = Typography;
 
 export const PnlPage: React.FC = () => {
-  const { selectedCycleId, pnlSnapshot, recalculateAll, cycles } = useAppStore();
+  const { selectedCycleId, pnlSnapshot, recalculateAll, cycles, displayUnit } = useAppStore();
 
   useEffect(() => {
     recalculateAll();
@@ -136,10 +137,6 @@ export const PnlPage: React.FC = () => {
   const grossProfitMargin = totalRevenue > 0 ? ((totalRevenue - totalCogs) / totalRevenue) * 100 : 0;
   const netProfitMargin = totalRevenue > 0 ? (totalNetIncome / totalRevenue) * 100 : 0;
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-  };
-
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
@@ -156,7 +153,7 @@ export const PnlPage: React.FC = () => {
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem' }}>TOTAL PENDAPATAN KOTOR</span>}
               value={totalRevenue}
-              formatter={v => <span className="font-mono" style={{ fontSize: '1.4rem', color: '#fff', fontWeight: 700 }}>{formatCurrency(Number(v))}</span>}
+              formatter={v => <span className="font-mono" style={{ fontSize: '1.4rem', color: '#fff', fontWeight: 700 }}>{formatCurrency(Number(v), displayUnit)}</span>}
             />
           </Card>
         </Col>
@@ -165,7 +162,7 @@ export const PnlPage: React.FC = () => {
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem' }}>TOTAL BEBAN OPERASIONAL</span>}
               value={totalOpex}
-              formatter={v => <span className="font-mono" style={{ fontSize: '1.4rem', color: '#fff', fontWeight: 700 }}>{formatCurrency(Number(v))}</span>}
+              formatter={v => <span className="font-mono" style={{ fontSize: '1.4rem', color: '#fff', fontWeight: 700 }}>{formatCurrency(Number(v), displayUnit)}</span>}
             />
           </Card>
         </Col>

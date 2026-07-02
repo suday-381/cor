@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Card, Space, Steps, Button, Input, List, Avatar, Tag, Typography, Alert, Divider, Row, Col, Modal, Form } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Space, Steps, Button, Input, List, Avatar, Tag, Typography, Alert, Divider, Row, Col, Modal, Form, Select } from 'antd';
 import {
   SendOutlined,
   CheckOutlined,
@@ -23,13 +23,24 @@ export const WorkflowPage: React.FC = () => {
     submitWorkflow,
     approveWorkflowStage,
     rejectWorkflowStage,
+    loadWorkflow,
+    departments,
   } = useAppStore();
 
+  const [selectedDeptId, setSelectedDeptId] = useState<string>(currentUser?.departmentId || 'd-sales');
   const [commentInput, setCommentInput] = useState('');
   const [rejectReasonInput, setRejectReasonInput] = useState('');
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
 
   const activeCycle = cycles.find(c => c.id === selectedCycleId);
+  const showDeptSelector = ['cfo', 'finance_manager', 'super_admin'].includes(currentUser?.role || '');
+
+  useEffect(() => {
+    if (selectedCycleId) {
+      const deptId = selectedDeptId || currentUser?.departmentId || '';
+      loadWorkflow(selectedCycleId, deptId);
+    }
+  }, [selectedCycleId, selectedDeptId, currentUser, loadWorkflow]);
 
   const getStatusAlert = () => {
     if (!workflow) return null;
@@ -74,13 +85,13 @@ export const WorkflowPage: React.FC = () => {
   };
 
   const handleApprove = () => {
-    approveWorkflowStage(commentInput || 'Disetujui.');
+    approveWorkflowStage(commentInput || 'Disetujui.', selectedDeptId);
     setCommentInput('');
   };
 
   const handleRejectSubmit = () => {
     if (!rejectReasonInput.trim()) return;
-    rejectWorkflowStage(rejectReasonInput);
+    rejectWorkflowStage(rejectReasonInput, selectedDeptId);
     setRejectReasonInput('');
     setIsRejectModalOpen(false);
   };
@@ -90,16 +101,30 @@ export const WorkflowPage: React.FC = () => {
     workflow?.status === 'in_progress' &&
     currentStage?.approverRole === currentUser?.role;
 
-  const isOwner = currentUser?.role === 'finance_manager';
+  const isOwner = currentUser?.role === 'finance_manager' || currentUser?.role === 'dept_head';
   const isDraftState = activeCycle?.status === 'draft';
 
   return (
     <div>
-      <div style={{ marginBottom: 20 }}>
-        <Title level={2} style={{ color: '#fff', margin: 0 }}>Workflow Approval & Persetujuan</Title>
-        <Paragraph style={{ color: 'rgba(255,255,255,0.45)', margin: 0 }}>
-          Ajukan RKAP untuk disetujui direksi, lacak progress workflow bertingkat, dan berikan catatan review.
-        </Paragraph>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <Title level={2} style={{ color: '#fff', margin: 0 }}>Workflow Approval & Persetujuan</Title>
+          <Paragraph style={{ color: 'rgba(255,255,255,0.45)', margin: 0 }}>
+            Ajukan RKAP untuk disetujui direksi, lacak progress workflow bertingkat, dan berikan catatan review.
+          </Paragraph>
+        </div>
+        {showDeptSelector && (
+          <Space align="center">
+            <span style={{ color: '#9CA3AF' }}>Pilih Departemen:</span>
+            <Select
+              value={selectedDeptId}
+              onChange={setSelectedDeptId}
+              style={{ width: 220 }}
+              dropdownStyle={{ backgroundColor: '#111827' }}
+              options={departments.map(d => ({ value: d.id, label: d.name }))}
+            />
+          </Space>
+        )}
       </div>
 
       {getStatusAlert()}
@@ -167,7 +192,7 @@ export const WorkflowPage: React.FC = () => {
                   type="primary"
                   icon={<SendOutlined />}
                   style={{ width: '100%', marginTop: 12 }}
-                  onClick={submitWorkflow}
+                  onClick={() => submitWorkflow(selectedDeptId)}
                 >
                   Ajukan untuk Review
                 </Button>

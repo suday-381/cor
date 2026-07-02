@@ -38,4 +38,7 @@ export class ApprovalStage {
 
   @Column({ name: 'decided_at', nullable: true })
   decidedAt?: string;
+
+  @Column({ name: 'sort_order', type: 'int', default: 0 })
+  sortOrder: number;
 }

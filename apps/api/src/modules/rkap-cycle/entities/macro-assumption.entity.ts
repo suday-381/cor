@@ -30,4 +30,25 @@ export class MacroAssumption {
 
   @Column({ type: 'decimal', name: 'tax_rate', precision: 5, scale: 2, default: 22.0 })
   taxRate: number;
+
+  @Column({ type: 'decimal', name: 'beginning_cash', precision: 18, scale: 2, default: 15000000000.0 })
+  beginningCash: number;
+
+  @Column({ type: 'varchar', name: 'beginning_cash_option', default: 'manual' })
+  beginningCashOption: 'manual' | 'previous_year';
+
+  @Column({ type: 'decimal', name: 'new_loan_amount', precision: 18, scale: 2, default: 0.0 })
+  newLoanAmount: number;
+
+  @Column({ type: 'decimal', name: 'loan_interest_rate', precision: 5, scale: 2, default: 0.0 })
+  loanInterestRate: number;
+
+  @Column({ type: 'decimal', name: 'loan_repayment_annual', precision: 18, scale: 2, default: 0.0 })
+  loanRepaymentAnnual: number;
+
+  @Column({ type: 'decimal', name: 'dividends_paid', precision: 18, scale: 2, default: 0.0 })
+  dividendsPaid: number;
+
+  @Column({ type: 'jsonb', name: 'previous_balance_sheet', nullable: true })
+  previousBalanceSheet?: Record<string, number>;
 }

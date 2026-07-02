@@ -23,6 +23,9 @@ export class ApprovalWorkflow {
   @Column({ default: 'pending' })
   status: 'pending' | 'in_progress' | 'approved' | 'rejected';
 
+  @Column({ name: 'department_id', nullable: true })
+  departmentId?: string;
+
   @Column({ name: 'submitted_at', nullable: true })
   submittedAt?: string;
 

@@ -20,7 +20,7 @@ export class AuthService {
       throw new UnauthorizedException('Kredensial tidak valid');
     }
 
-    const payload = { email: user.email, sub: user.id, role: user.role };
+    const payload = { email: user.email, sub: user.id, role: user.role, name: user.name };
     return {
       access_token: this.jwtService.sign(payload),
       user: {

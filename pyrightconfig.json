@@ -1,0 +1,7 @@
+{
+  "venvPath": "apps/calc-engine",
+  "venv": ".venv",
+  "extraPaths": [
+    "apps/calc-engine"
+  ]
+}

@@ -102,6 +102,12 @@ export const mockCycles: RkapCycle[] = [
       industryGrowthRate: 5.2,
       commodityPrices: { 'CPO': 12500, 'Rubber': 8200 },
       taxRate: 22,
+      beginningCash: 5000000000,
+      beginningCashOption: 'manual',
+      newLoanAmount: 0,
+      loanInterestRate: 10,
+      loanRepaymentAnnual: 0,
+      dividendsPaid: 0,
     },
     versions: [
       { id: 'v1', version: 1, createdAt: '2026-05-20T10:00:00Z', createdBy: 'Rina Hartati', changeNote: 'Initial draft' },
@@ -122,6 +128,12 @@ export const mockCycles: RkapCycle[] = [
       industryGrowthRate: 5.0,
       commodityPrices: { 'CPO': 11800, 'Rubber': 7900 },
       taxRate: 22,
+      beginningCash: 5000000000,
+      beginningCashOption: 'manual',
+      newLoanAmount: 0,
+      loanInterestRate: 10,
+      loanRepaymentAnnual: 0,
+      dividendsPaid: 0,
     },
     versions: [
       { id: 'v1a', version: 1, createdAt: '2025-09-01T10:00:00Z', createdBy: 'Rina Hartati', changeNote: 'Initial draft' },
@@ -144,6 +156,12 @@ export const mockCycles: RkapCycle[] = [
       industryGrowthRate: 4.8,
       commodityPrices: { 'CPO': 11200, 'Rubber': 7500 },
       taxRate: 22,
+      beginningCash: 5000000000,
+      beginningCashOption: 'manual',
+      newLoanAmount: 0,
+      loanInterestRate: 10,
+      loanRepaymentAnnual: 0,
+      dividendsPaid: 0,
     },
     versions: [
       { id: 'v1b', version: 1, createdAt: '2024-09-01T10:00:00Z', createdBy: 'Rina Hartati', changeNote: 'Initial' },
@@ -210,13 +228,13 @@ export const mockCosts: CostLineItem[] = [
 ];
 
 export const mockPersonnelCosts: PersonnelCost[] = [
-  { id: 'pc1', cycleId: 'c-2027', departmentId: 'd-ops', position: 'Operator Produksi', headcount: 35, monthlySalary: 5_500_000, allowances: 1_500_000, bpjs: 550_000, bonus: 5_500_000, totalAnnual: 35 * (5_500_000 + 1_500_000 + 550_000) * 12 + 35 * 5_500_000 },
-  { id: 'pc2', cycleId: 'c-2027', departmentId: 'd-ops', position: 'Supervisor Produksi', headcount: 5, monthlySalary: 12_000_000, allowances: 3_000_000, bpjs: 1_200_000, bonus: 12_000_000, totalAnnual: 5 * (12_000_000 + 3_000_000 + 1_200_000) * 12 + 5 * 12_000_000 },
-  { id: 'pc3', cycleId: 'c-2027', departmentId: 'd-sales', position: 'Sales Executive', headcount: 15, monthlySalary: 8_000_000, allowances: 2_500_000, bpjs: 800_000, bonus: 16_000_000, totalAnnual: 15 * (8_000_000 + 2_500_000 + 800_000) * 12 + 15 * 16_000_000 },
-  { id: 'pc4', cycleId: 'c-2027', departmentId: 'd-sales', position: 'Marketing Manager', headcount: 3, monthlySalary: 18_000_000, allowances: 5_000_000, bpjs: 1_800_000, bonus: 18_000_000, totalAnnual: 3 * (18_000_000 + 5_000_000 + 1_800_000) * 12 + 3 * 18_000_000 },
-  { id: 'pc5', cycleId: 'c-2027', departmentId: 'd-fin', position: 'Accounting Staff', headcount: 6, monthlySalary: 8_500_000, allowances: 2_000_000, bpjs: 850_000, bonus: 8_500_000, totalAnnual: 6 * (8_500_000 + 2_000_000 + 850_000) * 12 + 6 * 8_500_000 },
-  { id: 'pc6', cycleId: 'c-2027', departmentId: 'd-it', position: 'Software Engineer', headcount: 6, monthlySalary: 15_000_000, allowances: 3_000_000, bpjs: 1_500_000, bonus: 15_000_000, totalAnnual: 6 * (15_000_000 + 3_000_000 + 1_500_000) * 12 + 6 * 15_000_000 },
-  { id: 'pc7', cycleId: 'c-2027', departmentId: 'd-hr', position: 'HR Staff', headcount: 5, monthlySalary: 7_500_000, allowances: 1_800_000, bpjs: 750_000, bonus: 7_500_000, totalAnnual: 5 * (7_500_000 + 1_800_000 + 750_000) * 12 + 5 * 7_500_000 },
+  { id: 'pc1', cycleId: 'c-2027', departmentId: 'd-ops', position: 'Operator Produksi', headcount: 35, monthlySalary: 5_500_000, allowances: 1_500_000, bpjs: 550_000, bonus: 5_500_000, totalAnnual: 35 * (5_500_000 + 1_500_000 + 550_000) * 12 + 35 * 5_500_000, costCategory: 'cogs' },
+  { id: 'pc2', cycleId: 'c-2027', departmentId: 'd-ops', position: 'Supervisor Produksi', headcount: 5, monthlySalary: 12_000_000, allowances: 3_000_000, bpjs: 1_200_000, bonus: 12_000_000, totalAnnual: 5 * (12_000_000 + 3_000_000 + 1_200_000) * 12 + 5 * 12_000_000, costCategory: 'cogs' },
+  { id: 'pc3', cycleId: 'c-2027', departmentId: 'd-sales', position: 'Sales Executive', headcount: 15, monthlySalary: 8_000_000, allowances: 2_500_000, bpjs: 800_000, bonus: 16_000_000, totalAnnual: 15 * (8_000_000 + 2_500_000 + 800_000) * 12 + 15 * 16_000_000, costCategory: 'opex' },
+  { id: 'pc4', cycleId: 'c-2027', departmentId: 'd-sales', position: 'Marketing Manager', headcount: 3, monthlySalary: 18_000_000, allowances: 5_000_000, bpjs: 1_800_000, bonus: 18_000_000, totalAnnual: 3 * (18_000_000 + 5_000_000 + 1_800_000) * 12 + 3 * 18_000_000, costCategory: 'opex' },
+  { id: 'pc5', cycleId: 'c-2027', departmentId: 'd-fin', position: 'Accounting Staff', headcount: 6, monthlySalary: 8_500_000, allowances: 2_000_000, bpjs: 850_000, bonus: 8_500_000, totalAnnual: 6 * (8_500_000 + 2_000_000 + 850_000) * 12 + 6 * 8_500_000, costCategory: 'opex' },
+  { id: 'pc6', cycleId: 'c-2027', departmentId: 'd-it', position: 'Software Engineer', headcount: 6, monthlySalary: 15_000_000, allowances: 3_000_000, bpjs: 1_500_000, bonus: 15_000_000, totalAnnual: 6 * (15_000_000 + 3_000_000 + 1_500_000) * 12 + 6 * 15_000_000, costCategory: 'opex' },
+  { id: 'pc7', cycleId: 'c-2027', departmentId: 'd-hr', position: 'HR Staff', headcount: 5, monthlySalary: 7_500_000, allowances: 1_800_000, bpjs: 750_000, bonus: 7_500_000, totalAnnual: 5 * (7_500_000 + 1_800_000 + 750_000) * 12 + 5 * 7_500_000, costCategory: 'opex' },
 ];
 
 // ============================================================
@@ -371,18 +389,21 @@ export const mockWorkflow: ApprovalWorkflow = {
       comments: [
         { id: 'cmt1', stageId: 'stg1', userId: 'u3', userName: 'Rina Hartati', userRole: 'finance_manager', content: 'RKAP 2027 telah dikonsolidasikan dari seluruh departemen. Siap untuk review.', createdAt: '2026-05-21T10:00:00Z' },
       ],
+      sortOrder: 1,
     },
     {
       id: 'stg2', workflowId: 'wf-1', stageName: 'Review oleh CFO',
       approverRole: 'cfo', approverUserId: 'u2', approverName: 'Diana Wijaya',
       status: 'pending', comments: [],
       deadline: '2026-05-28T17:00:00Z',
+      sortOrder: 2,
     },
     {
       id: 'stg3', workflowId: 'wf-1', stageName: 'Approval Final Direksi',
       approverRole: 'cfo', approverUserId: 'u2', approverName: 'Diana Wijaya',
       status: 'pending', comments: [],
       deadline: '2026-06-05T17:00:00Z',
+      sortOrder: 3,
     },
   ],
   currentStageIndex: 1,

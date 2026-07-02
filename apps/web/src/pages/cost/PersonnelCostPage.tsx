@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Row, Col, Typography, Statistic } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Row, Col, Typography, Statistic, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/appStore';
 import { PersonnelCost } from '@/types';
+import { formatCurrency } from '@/utils/format';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -17,6 +18,7 @@ export const PersonnelCostPage: React.FC = () => {
     updatePersonnelItem,
     deletePersonnelItem,
     departments,
+    displayUnit,
   } = useAppStore();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -30,10 +32,6 @@ export const PersonnelCostPage: React.FC = () => {
   const activeCycle = cycles.find(c => c.id === selectedCycleId);
   const activeStaff = personnelItems.filter(p => p.cycleId === selectedCycleId);
   const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked';
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-  };
 
   const deptOptions = departments.map(d => ({ value: d.id, label: d.name }));
 
@@ -54,6 +52,19 @@ export const PersonnelCostPage: React.FC = () => {
       }
     },
     {
+      title: 'Kategori Biaya',
+      dataIndex: 'costCategory',
+      key: 'costCategory',
+      render: (cat?: string) => {
+        const isCogs = (cat || 'opex').toLowerCase() === 'cogs';
+        return (
+          <Tag color={isCogs ? 'success' : 'processing'}>
+            {isCogs ? 'COGS (Direct)' : 'OPEX (Indirect)'}
+          </Tag>
+        );
+      }
+    },
+    {
       title: 'Jumlah Karyawan (HC)',
       dataIndex: 'headcount',
       key: 'headcount',
@@ -64,31 +75,31 @@ export const PersonnelCostPage: React.FC = () => {
       title: 'Gaji Pokok Bulanan',
       dataIndex: 'monthlySalary',
       key: 'monthlySalary',
-      render: (val: number) => <span className="font-mono">{formatCurrency(val)}</span>
+      render: (val: number) => <span className="font-mono">{formatCurrency(val, displayUnit)}</span>
     },
     {
       title: 'Tunjangan',
       dataIndex: 'allowances',
       key: 'allowances',
-      render: (val: number) => <span className="font-mono">{formatCurrency(val)}</span>
+      render: (val: number) => <span className="font-mono">{formatCurrency(val, displayUnit)}</span>
     },
     {
       title: 'BPJS & Manfaat',
       dataIndex: 'bpjs',
       key: 'bpjs',
-      render: (val: number) => <span className="font-mono">{formatCurrency(val)}</span>
+      render: (val: number) => <span className="font-mono">{formatCurrency(val, displayUnit)}</span>
     },
     {
       title: 'Bonus / THR (Tahunan)',
       dataIndex: 'bonus',
       key: 'bonus',
-      render: (val: number) => <span className="font-mono text-warning">{formatCurrency(val)}</span>
+      render: (val: number) => <span className="font-mono text-warning">{formatCurrency(val, displayUnit)}</span>
     },
     {
       title: 'Total Anggaran Tahunan',
       dataIndex: 'totalAnnual',
       key: 'totalAnnual',
-      render: (val: number) => <span className="font-mono text-positive" style={{ fontWeight: 700 }}>{formatCurrency(val)}</span>
+      render: (val: number) => <span className="font-mono text-positive" style={{ fontWeight: 700 }}>{formatCurrency(val, displayUnit)}</span>
     },
     ...(!isReadOnly
       ? [
@@ -110,6 +121,7 @@ export const PersonnelCostPage: React.FC = () => {
                       allowances: record.allowances,
                       bpjs: record.bpjs,
                       bonus: record.bonus,
+                      costCategory: record.costCategory || 'opex',
                     });
                     setIsEditModalOpen(true);
                   }}
@@ -143,6 +155,7 @@ export const PersonnelCostPage: React.FC = () => {
       bpjs: values.bpjs,
       bonus: values.bonus,
       totalAnnual,
+      costCategory: values.costCategory || 'opex',
     });
 
     setIsAddModalOpen(false);
@@ -162,6 +175,7 @@ export const PersonnelCostPage: React.FC = () => {
         bpjs: values.bpjs,
         bonus: values.bonus,
         totalAnnual,
+        costCategory: values.costCategory || 'opex',
       });
       setIsEditModalOpen(false);
     }
@@ -213,7 +227,7 @@ export const PersonnelCostPage: React.FC = () => {
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.45)' }}>TOTAL BIAYA PERSONALIA TAHUNAN</span>}
               value={totalAnnualStaffCost}
-              formatter={value => <span className="font-mono text-positive" style={{ fontSize: '2rem', fontWeight: 700 }}>{formatCurrency(Number(value))}</span>}
+              formatter={value => <span className="font-mono text-positive" style={{ fontSize: '2rem', fontWeight: 700 }}>{formatCurrency(Number(value), displayUnit)}</span>}
             />
           </Card>
         </Col>
@@ -243,7 +257,7 @@ export const PersonnelCostPage: React.FC = () => {
           form={addForm}
           onFinish={handleAdd}
           layout="vertical"
-          initialValues={{ departmentId: 'd-ops', headcount: 1, monthlySalary: 5000000, allowances: 1000000, bpjs: 500000, bonus: 5000000 }}
+          initialValues={{ departmentId: 'd-ops', headcount: 1, monthlySalary: 5000000, allowances: 1000000, bpjs: 500000, bonus: 5000000, costCategory: 'opex' }}
           style={{ marginTop: 16 }}
         >
           <Row gutter={16}>
@@ -255,6 +269,19 @@ export const PersonnelCostPage: React.FC = () => {
             <Col span={10}>
               <Form.Item name="departmentId" label="Departemen" rules={[{ required: true }]}>
                 <Select options={deptOptions} dropdownStyle={{ backgroundColor: '#111827' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="costCategory" label="Kategori Beban Gaji" rules={[{ required: true }]}>
+                <Select
+                  options={[
+                    { value: 'cogs', label: 'COGS (Karyawan Langsung / Direct Cost)' },
+                    { value: 'opex', label: 'OPEX (Karyawan Tidak Langsung / Indirect Cost)' },
+                  ]}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -320,6 +347,19 @@ export const PersonnelCostPage: React.FC = () => {
             <Col span={10}>
               <Form.Item name="departmentId" label="Departemen" rules={[{ required: true }]}>
                 <Select options={deptOptions} dropdownStyle={{ backgroundColor: '#111827' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="costCategory" label="Kategori Beban Gaji" rules={[{ required: true }]}>
+                <Select
+                  options={[
+                    { value: 'cogs', label: 'COGS (Karyawan Langsung / Direct Cost)' },
+                    { value: 'opex', label: 'OPEX (Karyawan Tidak Langsung / Indirect Cost)' },
+                  ]}
+                />
               </Form.Item>
             </Col>
           </Row>

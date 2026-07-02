@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/appStore';
 import { MonthlyGrid } from '@/components/common/MonthlyGrid';
 import { CostLineItem, MonthlyValues, COST_CATEGORY_LABELS } from '@/types';
+import { formatCurrency } from '@/utils/format';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -20,6 +21,7 @@ export const CostBudgetPage: React.FC = () => {
     deleteCostItem,
     coa,
     departments,
+    displayUnit,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState('opex');
@@ -34,10 +36,6 @@ export const CostBudgetPage: React.FC = () => {
   const activeCycle = cycles.find(c => c.id === selectedCycleId);
   const activeCosts = costItems.filter(c => c.cycleId === selectedCycleId);
   const isReadOnly = activeCycle?.status === 'approved' || activeCycle?.status === 'locked';
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-  };
 
   const calculateSum = (mv: MonthlyValues) => {
     return Object.values(mv).reduce((a, b) => a + b, 0);
@@ -57,8 +55,8 @@ export const CostBudgetPage: React.FC = () => {
         <div>
           <Text strong style={{ color: '#fff' }}>{record.accountCode} - {record.accountName}</Text>
           {record.notes && (
-            <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)' }}>
-              Catatan: {record.notes}
+            <div style={{ fontSize: '0.8rem', color: '#10B981', marginTop: 4 }}>
+              <strong>Rincian:</strong> {record.notes}
             </div>
           )}
         </div>
@@ -90,7 +88,22 @@ export const CostBudgetPage: React.FC = () => {
       key: 'totalYear',
       render: (_: any, record: CostLineItem) => {
         const sum = calculateSum(record.monthlyAmounts);
-        return <span className="font-mono text-positive" style={{ fontWeight: 600 }}>{formatCurrency(sum)}</span>;
+        return <span className="font-mono text-positive" style={{ fontWeight: 600 }}>{formatCurrency(sum, displayUnit)}</span>;
+      }
+    },
+    {
+      title: 'YoY %',
+      key: 'yoy',
+      render: (_: any, record: CostLineItem) => {
+        const targetSum = calculateSum(record.monthlyAmounts);
+        const prevSum = record.previousYear ? calculateSum(record.previousYear) : 0;
+        if (prevSum === 0) return <Tag color="success">+100.0% (YoY)</Tag>;
+        const growth = ((targetSum - prevSum) / prevSum) * 100;
+        return (
+          <Tag color={growth >= 0 ? 'success' : 'error'}>
+            {growth >= 0 ? '+' : ''}{growth.toFixed(1)}%
+          </Tag>
+        );
       }
     },
     ...(!isReadOnly
@@ -215,7 +228,7 @@ export const CostBudgetPage: React.FC = () => {
                       <Statistic
                         title={<span style={{ color: 'rgba(255,255,255,0.45)' }}>TOTAL ANGGARAN OPEX TAHUNAN</span>}
                         value={totalOpex}
-                        formatter={value => <span className="font-mono text-positive" style={{ fontSize: '2rem', fontWeight: 700 }}>{formatCurrency(Number(value))}</span>}
+                        formatter={value => <span className="font-mono text-positive" style={{ fontSize: '2rem', fontWeight: 700 }}>{formatCurrency(Number(value), displayUnit)}</span>}
                       />
                     </Card>
                   </Col>
@@ -241,7 +254,7 @@ export const CostBudgetPage: React.FC = () => {
                             header={
                               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', paddingRight: 24 }}>
                                 <Text strong style={{ color: '#fff' }}>{item.accountCode} - {item.accountName} ({dept?.name || 'Umum'})</Text>
-                                <Text className="font-mono" style={{ color: '#10B981' }}>{formatCurrency(calculateSum(item.monthlyAmounts))}</Text>
+                                <Text className="font-mono" style={{ color: '#10B981' }}>{formatCurrency(calculateSum(item.monthlyAmounts), displayUnit)}</Text>
                               </div>
                             }
                             key={item.id}
@@ -308,8 +321,12 @@ export const CostBudgetPage: React.FC = () => {
             </Col>
           </Row>
 
-          <Form.Item name="notes" label="Catatan / Justifikasi">
-            <Input.TextArea placeholder="Misal: Dihitung berdasarkan perkiraan kenaikan tarif dasar listrik" rows={2} />
+          <Form.Item
+            name="notes"
+            label="Keterangan / Rincian Biaya (Contoh: Cost 1, Cost 2, Cost 3)"
+            rules={[{ required: true, message: 'Masukkan rincian biaya!' }]}
+          >
+            <Input.TextArea placeholder="Tulis rincian biaya: solar 5jt, rental mobil 2jt, dll." rows={2} />
           </Form.Item>
         </Form>
       </Modal>
@@ -353,8 +370,12 @@ export const CostBudgetPage: React.FC = () => {
             </Col>
           </Row>
 
-          <Form.Item name="notes" label="Catatan / Justifikasi">
-            <Input.TextArea rows={2} />
+          <Form.Item
+            name="notes"
+            label="Keterangan / Rincian Biaya (Contoh: Cost 1, Cost 2, Cost 3)"
+            rules={[{ required: true, message: 'Masukkan rincian biaya!' }]}
+          >
+            <Input.TextArea placeholder="Tulis rincian biaya: solar 5jt, rental mobil 2jt, dll." rows={2} />
           </Form.Item>
         </Form>
       </Modal>

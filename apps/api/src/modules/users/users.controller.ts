@@ -6,24 +6,42 @@ import { User } from './user.entity';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  private mapUser(user: User) {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      department: user.department?.name || null,
+      departmentId: user.departmentId || null,
+      isActive: user.isActive,
+      lastLogin: user.lastLogin,
+      createdAt: user.createdAt,
+    };
+  }
+
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  async findAll() {
+    const users = await this.usersService.findAll();
+    return users.map((u) => this.mapUser(u));
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    const user = await this.usersService.findOne(id);
+    return this.mapUser(user);
   }
 
   @Post()
-  create(@Body() userData: Partial<User>) {
-    return this.usersService.create(userData);
+  async create(@Body() userData: any) {
+    const user = await this.usersService.create(userData);
+    return this.mapUser(user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updates: Partial<User>) {
-    return this.usersService.update(id, updates);
+  async update(@Param('id') id: string, @Body() updates: any) {
+    const user = await this.usersService.update(id, updates);
+    return this.mapUser(user);
   }
 
   @Delete(':id')
